@@ -1,5 +1,6 @@
 package com.ezu.common.page;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -18,6 +19,7 @@ public class PageQuery {
     @NotNull(message = "pageSize不能为空")
     private Integer pageSize = 10;
 
+    @JsonIgnore
     @AssertTrue(message = "pageSize取值不合法（-1=不分页 或 1~500）")
     public boolean isPageSizeLegal() {
         return pageSize == null || pageSize == -1 || (pageSize >= 1 && pageSize <= 500);
