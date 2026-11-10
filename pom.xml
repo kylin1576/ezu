@@ -49,6 +49,12 @@
                 <artifactId>sa-token-spring-boot4-starter</artifactId>
                 <version>${sa-token.version}</version>
             </dependency>
+            <!-- sa-token 会话存 Redis（走 spring-data-redis RedisTemplate；不选 redis-jackson，其依赖 Jackson2 databind 与本项目 Jackson3 冲突） -->
+            <dependency>
+                <groupId>cn.dev33</groupId>
+                <artifactId>sa-token-redis-template</artifactId>
+                <version>${sa-token.version}</version>
+            </dependency>
             <dependency>
                 <groupId>cn.hutool</groupId>
                 <artifactId>hutool-all</artifactId>
