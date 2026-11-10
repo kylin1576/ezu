@@ -37,7 +37,6 @@
     "fmt": "vp fmt",
     "gen-route": "pnpm sa gen-route",
     "lint": "vp lint --fix && eslint --fix .",
-    "prepare": "vp config --no-agent",
     "preview": "vp preview",
     "release": "pnpm sa release",
     "typecheck": "vue-tsc --noEmit --skipLibCheck",
