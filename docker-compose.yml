@@ -1,0 +1,48 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: ezu-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ezu123456
+      MYSQL_DATABASE: ezu
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - ezu-mysql-data:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_general_ci
+
+  redis:
+    image: redis:7-alpine
+    container_name: ezu-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ezu-redis-data:/data
+
+  # app（后端镜像就绪后启用）
+  # app:
+  #   build: .
+  #   container_name: ezu-app
+  #   ports:
+  #     - "9000:9000"
+  #   depends_on:
+  #     - mysql
+  #     - redis
+
+  # 【规划预留】pgvector 向量库（当前无 PG 环境，启用时取消注释并打开 ezu-ai 的 spring-ai-pgvector 依赖）
+  # pgvector:
+  #   image: pgvector/pgvector:pg16
+  #   container_name: ezu-pgvector
+  #   environment:
+  #     POSTGRES_PASSWORD: ezu123456
+  #     POSTGRES_DB: ezu_ai
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - ezu-pg-data:/var/lib/postgresql/data
+
+volumes:
+  ezu-mysql-data:
+  ezu-redis-data:
+  # ezu-pg-data:
