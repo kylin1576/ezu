@@ -4,6 +4,7 @@ import lombok.Data;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 分页响应
@@ -21,6 +22,6 @@ public class PageVo<T> {
 
     public PageVo(Long total, List<T> list) {
         this.total = total;
-        this.list = list;
+        this.list = Objects.requireNonNullElse(list, new ArrayList<>());
     }
 }
