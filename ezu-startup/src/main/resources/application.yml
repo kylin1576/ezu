@@ -1,0 +1,43 @@
+server:
+  port: 9000
+
+spring:
+  application:
+    name: ezu
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/ezu?useUnicode=true&characterEncoding=utf8mb4&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: ezu123456
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config:
+      id-type: assign_id
+      logic-delete-field: isDeleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+sa-token:
+  token-name: ezu-token
+  timeout: 604800
+  token-style: uuid
+  is-log: false
+
+# 【M4 启用】智谱 GLM（OpenAI 兼容端点，base-url 必须含版本路径）
+# spring:
+#   ai:
+#     openai:
+#       api-key: ${ZHIPU_API_KEY:}
+#       base-url: https://open.bigmodel.cn/api/paas/v4
+#       chat:
+#         options:
+#           model: glm-4.5-flash
