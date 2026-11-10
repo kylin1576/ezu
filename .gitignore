@@ -1,0 +1,26 @@
+# Java
+target/
+*.class
+*.jar
+hs_err_pid*.log
+
+# Node
+node_modules/
+dist/
+unpackage/
+.pnpm-store/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+!.vscode/extensions.json
+
+# Env
+.env
+.env.local
+*.local.yml
+
+# OS
+.DS_Store
+Thumbs.db
