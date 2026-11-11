@@ -231,7 +231,10 @@ async function goConfirm(): Promise<void> {
   }
   if (!(await ensureLogin())) return;
   uni.navigateTo({
-    url: `/pages/order/confirm?skuId=${currentSku.value.id}&planId=${currentPlan.value.id}&days=${rentDays.value}`,
+    url:
+      `/pages/order/confirm?skuId=${currentSku.value.id}&planId=${currentPlan.value.id}` +
+      `&days=${rentDays.value}&unit=${currentPlan.value.unit}` +
+      `&goodsName=${encodeURIComponent(detail.value?.name ?? "")}`,
   });
 }
 
