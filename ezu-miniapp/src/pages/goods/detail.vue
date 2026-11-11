@@ -6,13 +6,8 @@
 </template>
 
 <script setup lang="ts">
-import { onLoad } from "@dcloudio/uni-app";
-
-// 入口：首页推荐流商品卡
+// 入口：首页推荐流商品卡；query 携带 id（商品 SPU id）
 // TODO(M3c): 接 /api/app/goods/{id}——轮播图 + 租期选择 + 租金方案 + 立即租赁（ensureLogin 后跳订单确认页）
-onLoad((options) => {
-  console.info("goods/detail id:", options?.id);
-});
 </script>
 
 <style lang="scss" scoped>

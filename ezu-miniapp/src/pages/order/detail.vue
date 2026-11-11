@@ -6,13 +6,8 @@
 </template>
 
 <script setup lang="ts">
-import { onLoad } from "@dcloudio/uni-app";
-
-// 入口：订单列表卡片
+// 入口：订单列表卡片；query 携带 orderNo（业务单号，不用数据库 ID）
 // TODO(M3c): 接 /api/app/order/{orderNo}——状态流转时间线 + 设备信息 + 支付/续租/归还操作
-onLoad((options) => {
-  console.info("order/detail orderNo:", options?.orderNo);
-});
 </script>
 
 <style lang="scss" scoped>

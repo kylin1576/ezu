@@ -6,13 +6,9 @@
 </template>
 
 <script setup lang="ts">
-import { onLoad } from "@dcloudio/uni-app";
-
 // 入口：首页搜索框 / 首页金刚区 / 分类页二级分类
+// 入口参数：query 携带 category（一级分类名）/ sub（二级分类名）/ keyword（M3c 搜索）
 // TODO(M3c): 接 /api/app/goods/list——分页 + 关键字/分类过滤，2 列商品卡复用首页样式
-onLoad((options) => {
-  console.info("goods/list query:", options?.category, options?.sub);
-});
 </script>
 
 <style lang="scss" scoped>

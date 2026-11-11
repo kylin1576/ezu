@@ -146,7 +146,9 @@ function goGoodsList(categoryName: string, subName: string): void {
 <style lang="scss" scoped>
 .category-page {
   display: flex;
-  height: calc(100vh - 88rpx);
+  /* 微信小程序端 100vh 即页面可用高度（原生 tabBar 已排除）；
+     H5 端 tabBar 为 fixed 覆盖，底部可能被遮 ~88rpx，M3c 统一精调 */
+  height: 100vh;
 }
 
 /* ===== 左侧一级栏（176rpx） ===== */

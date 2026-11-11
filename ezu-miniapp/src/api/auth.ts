@@ -25,7 +25,7 @@ export function login(data: LoginReq): Promise<AppLoginVo> {
   return post<AppLoginVo>("/api/app/auth/login", data, false);
 }
 
-/** 退出登录 */
+/** 退出登录（autoRedirect=false：token 已过期时不应被 401 跳转打断登出流程） */
 export function logout(): Promise<void> {
-  return post<void>("/api/app/auth/logout");
+  return post<void>("/api/app/auth/logout", undefined, false);
 }

@@ -55,6 +55,8 @@ function getLoginCode(channel: LoginChannel): Promise<string> {
   // #ifdef H5
   return Promise.resolve("dev-h5");
   // #endif
+  // APP-PLUS 等其余平台暂未适配，显式失败而非静默返回 undefined
+  return Promise.reject(new Error("当前平台暂不支持登录"));
 }
 
 function persist(token: string, userInfo: UserVo): void {

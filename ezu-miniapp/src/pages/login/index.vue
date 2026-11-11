@@ -39,10 +39,14 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import type { LoginChannel } from "@/api/auth";
+import { ApiError } from "@/utils/request";
 import { useUserStore } from "@/stores/user";
 
 const userStore = useUserStore();
 const loading = ref(false);
+
+/** 登录成功 toast 的最短展示时长后再回跳 */
+const LOGIN_REDIRECT_DELAY_MS = 400;
 
 async function handleLogin(channel: LoginChannel): Promise<void> {
   if (loading.value) return;
@@ -50,9 +54,13 @@ async function handleLogin(channel: LoginChannel): Promise<void> {
   try {
     await userStore.login(channel);
     uni.showToast({ title: "登录成功", icon: "success" });
-    setTimeout(redirectBack, 400);
-  } catch {
-    // 失败提示由请求层统一 toast（网络失败/接口未开放/业务错误）
+    setTimeout(redirectBack, LOGIN_REDIRECT_DELAY_MS);
+  } catch (error) {
+    // ApiError（网络/接口/业务错误）由请求层统一 toast；
+    // 其余为 uni.login 取 code 失败等前置错误，此处兜底提示
+    if (!(error instanceof ApiError)) {
+      uni.showToast({ title: "登录失败，请重试", icon: "none" });
+    }
   } finally {
     loading.value = false;
   }
