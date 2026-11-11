@@ -90,7 +90,7 @@ public class OperateLogAspect {
         try {
             List<Object> serializableArgs = new ArrayList<>(args.length);
             for (Object arg : args) {
-                serializableArgs.add(isBizParam(arg) ? arg : arg.getClass().getSimpleName());
+                serializableArgs.add(isBizParam(arg) ? arg : arg == null ? "null" : arg.getClass().getSimpleName());
             }
             String json = JSONUtil.toJsonStr(serializableArgs);
             String masked = SENSITIVE_KEY_PATTERN.matcher(json).replaceAll("$1:\"" + MASKED_VALUE + "\"");

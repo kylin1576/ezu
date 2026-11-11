@@ -27,6 +27,9 @@ import java.util.stream.Collectors;
 
 /**
  * 后台权限域初始化（幂等：每步先查再插；失败只记日志，不阻断启动）
+ * <p>
+ * 注意：权限树有 count()>0 跳过守卫，本类后续新增的权限节点（如 role:save）不会自动长进已初始化过的存量库，
+ * 存量库需重置或手工 INSERT 对应权限行并补绑 admin 角色
  */
 @Slf4j
 @Component
