@@ -18,6 +18,22 @@
             <groupId>com.ezu</groupId>
             <artifactId>ezu-common</artifactId>
         </dependency>
+        <!-- BCrypt 密码加密（无传递依赖） -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+        <!-- 操作日志 AOP：Boot 4 已移除 spring-boot-starter-aop，直接依赖 BOM 管理的 aspectjweaver 即可启用 @Aspect 自动代理 -->
+        <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjweaver</artifactId>
+        </dependency>
+        <!-- MP 3.5.9+ 分页插件拆分到独立工件（starter 仅 optional 引入），启用分页需显式依赖 -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-jsqlparser</artifactId>
+            <version>${mybatis-plus.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
