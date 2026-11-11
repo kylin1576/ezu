@@ -111,6 +111,8 @@ const addressLoading = ref(true);
 const trial = ref<OrderTrialVo | null>(null);
 const trialLoading = ref(true);
 const submitting = ref(false);
+/** 已成功提交（redirect 跳转前的 600ms 窗口内保持按钮禁用，防重复下单） */
+const submitted = ref(false);
 
 /** 计费周期数（向上取整，与后端 RentalCalculator 口径一致） */
 const cycles = computed(() =>
@@ -119,7 +121,9 @@ const cycles = computed(() =>
 
 const unitText = computed(() => RENTAL_UNIT_TEXT[leaseUnit.value] ?? "月");
 
-const canSubmit = computed(() => Boolean(address.value && trial.value && !submitting.value));
+const canSubmit = computed(() =>
+  Boolean(address.value && trial.value && !submitting.value && !submitted.value),
+);
 
 onLoad((options) => {
   skuId.value = options?.skuId ? Number(options.skuId) : 0;
@@ -190,6 +194,8 @@ async function handleSubmit(): Promise<void> {
       addressId: address.value.id,
       remark: remark.value.trim() || undefined,
     });
+    // 先锁死提交态再 toast/跳转，防 redirect 前的重复点击窗口
+    submitted.value = true;
     uni.showToast({ title: "下单成功", icon: "success" });
     // 下单成功 → 订单详情（redirectTo 防回退回确认页重复下单）
     setTimeout(() => {

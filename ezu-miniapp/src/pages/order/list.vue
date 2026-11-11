@@ -30,12 +30,14 @@
         />
       </view>
 
-      <!-- 空态（首次加载完成且无数据） -->
-      <wd-status-tip
-        v-if="!pager.loading.value && !pager.list.value.length"
-        image="content"
-        tip="暂无相关订单"
+      <!-- 首屏加载中 -->
+      <wd-loadmore
+        v-else-if="pager.loading.value"
+        state="loading"
+        loading-text="加载中..."
       />
+      <!-- 空态（加载完成且无数据） -->
+      <wd-status-tip v-else image="content" tip="暂无相关订单" />
     </template>
   </view>
 </template>
@@ -45,13 +47,16 @@ import { ref, watch } from "vue";
 import { onPullDownRefresh, onReachBottom, onShow } from "@dcloudio/uni-app";
 import { useUserStore } from "@/stores/user";
 import OrderCard from "@/components/order-card/order-card.vue";
-import { orderCancel, orderConfirmReceive, orderList, orderReturnApply, type OrderListVo } from "@/api/order";
+import { orderList, type OrderListVo } from "@/api/order";
 import { ORDER_TABS, type OrderAction } from "@/constants/order";
 import { STORAGE_KEYS } from "@/config";
 import { usePagination } from "@/composables/use-pagination";
+import { execOrderAction } from "@/utils/order-actions";
 
 const userStore = useUserStore();
 const activeTab = ref(ORDER_TABS[0]?.key ?? "all");
+/** 操作按钮防重复提交守卫 */
+const submitting = ref(false);
 /** 是否已消费 onShow 的 storage tab（避免 watch 重复触发） */
 let initialized = false;
 
@@ -87,10 +92,14 @@ onShow(() => {
 watch(
   () => userStore.isLoggedIn,
   (loggedIn) => {
-    if (loggedIn && !pager.list.value.length) {
-      refresh();
-      initialized = true;
+    if (!loggedIn) {
+      // 登出清空：tab 页常驻内存，防换账号后展示上一账号订单
+      pager.reset();
+      initialized = false;
+      return;
     }
+    refresh();
+    initialized = true;
   },
 );
 
@@ -99,6 +108,8 @@ onReachBottom(() => {
 });
 
 onPullDownRefresh(async () => {
+  // reset + load：load 对 finished 短路，不 reset 时刷新会空转
+  pager.reset();
   await pager.load();
   uni.stopPullDownRefresh();
 });
@@ -113,28 +124,18 @@ function refresh(): void {
   pager.load();
 }
 
-/** 卡片操作按钮（确认弹窗 → 调接口 → 刷新） */
+/** 卡片操作按钮：支付跳详情页发起，其余走共享流程（守卫防重复提交） */
 async function onAction(action: OrderAction, orderNo: string): Promise<void> {
   if (action === "pay") {
-    // 支付在订单详情页发起
     uni.navigateTo({ url: `/pages/order/detail?orderNo=${orderNo}` });
     return;
   }
-  const confirmMap: Record<string, { title: string; content: string; api: (no: string) => Promise<void>; success: string }> = {
-    cancel: { title: "取消订单", content: "确定取消该订单吗？", api: orderCancel, success: "订单已取消" },
-    confirmReceive: { title: "确认收货", content: "确认已收到设备？确认后租约开始生效", api: orderConfirmReceive, success: "已确认收货" },
-    returnApply: { title: "申请归还", content: "申请后请按指引寄回设备", api: orderReturnApply, success: "归还申请已提交" },
-  };
-  const task = confirmMap[action];
-  if (!task) return;
-  const { cancel } = await uni.showModal({ title: task.title, content: task.content });
-  if (cancel) return;
+  if (submitting.value) return;
+  submitting.value = true;
   try {
-    await task.api(orderNo);
-    uni.showToast({ title: task.success, icon: "none" });
-    refresh();
-  } catch {
-    // 请求层已 toast
+    await execOrderAction(action, orderNo, refresh);
+  } finally {
+    submitting.value = false;
   }
 }
 

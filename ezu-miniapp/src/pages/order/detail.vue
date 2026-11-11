@@ -144,14 +144,8 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
-import {
-  orderCancel,
-  orderConfirmReceive,
-  orderDetail,
-  orderReturnApply,
-  type OrderDetailVo,
-} from "@/api/order";
-import { payOrderApi } from "@/api/payment";
+import { orderDetail, type OrderDetailVo } from "@/api/order";
+import { execOrderAction, execOrderPay } from "@/utils/order-actions";
 import {
   getOrderActions,
   ORDER_ACTION_TEXT,
@@ -196,51 +190,17 @@ async function loadDetail(): Promise<void> {
   }
 }
 
-/** 按状态执行操作（确认弹窗 → 调接口 → 重查详情） */
-async function onAction(action: OrderAction): Promise<void> {
+/** 按状态执行操作：支付走 execOrderPay，其余走共享流程（成功后重查详情；守卫防重复提交） */
+function onAction(action: OrderAction): void {
   if (submitting.value) return;
-  if (action === "pay") {
-    await handlePay();
-    return;
-  }
-  const confirmMap: Record<string, { title: string; content: string; api: (no: string) => Promise<void>; success: string }> = {
-    cancel: { title: "取消订单", content: "确定取消该订单吗？", api: orderCancel, success: "订单已取消" },
-    confirmReceive: { title: "确认收货", content: "确认已收到设备？确认后租约开始生效", api: orderConfirmReceive, success: "已确认收货" },
-    returnApply: { title: "申请归还", content: "申请后请按指引寄回设备", api: orderReturnApply, success: "归还申请已提交" },
-  };
-  const task = confirmMap[action];
-  if (!task) return;
-  const { cancel } = await uni.showModal({ title: task.title, content: task.content });
-  if (cancel) return;
   submitting.value = true;
-  try {
-    await task.api(orderNo.value);
-    uni.showToast({ title: task.success, icon: "none" });
-    await loadDetail();
-  } catch {
-    // 请求层已 toast
-  } finally {
+  const run =
+    action === "pay"
+      ? execOrderPay(orderNo.value, Number(order.value?.payAmount ?? 0), loadDetail)
+      : execOrderAction(action, orderNo.value, loadDetail);
+  void run.finally(() => {
     submitting.value = false;
-  }
-}
-
-/** 发起支付（mock 渠道即时成功，成功后重查详情状态即流转） */
-async function handlePay(): Promise<void> {
-  const { cancel } = await uni.showModal({
-    title: "确认支付",
-    content: `使用模拟支付通道支付 ¥${Number(order.value?.payAmount ?? 0).toFixed(2)}？`,
   });
-  if (cancel) return;
-  submitting.value = true;
-  try {
-    await payOrderApi(orderNo.value);
-    uni.showToast({ title: "支付成功", icon: "success" });
-    await loadDetail();
-  } catch {
-    // 请求层已 toast
-  } finally {
-    submitting.value = false;
-  }
 }
 </script>
 

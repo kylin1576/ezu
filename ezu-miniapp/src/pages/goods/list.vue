@@ -32,9 +32,12 @@
       />
     </view>
 
+    <!-- 首屏加载中 -->
+    <wd-loadmore v-if="!pager.list.value.length && pager.loading.value" state="loading" loading-text="加载中..." />
+
     <!-- 空态 -->
     <wd-status-tip
-      v-if="!pager.loading.value && !pager.list.value.length"
+      v-else-if="!pager.loading.value && !pager.list.value.length"
       image="search"
       tip="没有找到相关商品"
     />

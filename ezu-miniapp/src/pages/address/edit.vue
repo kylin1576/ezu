@@ -140,11 +140,13 @@ onLoad(async (options) => {
     const target = (page?.list ?? []).find((item) => item.id === id);
     if (!target) {
       uni.showToast({ title: "地址不存在", icon: "none" });
+      setTimeout(() => uni.navigateBack(), 800);
       return;
     }
     fillForm(target);
   } catch {
-    // 请求层已 toast
+    // 拉取失败不能停留在空表单（保存会误建新地址），退回列表页
+    setTimeout(() => uni.navigateBack(), 800);
   }
 });
 

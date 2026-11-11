@@ -259,8 +259,8 @@ function buildMockDetail(id: number): AppProductDetailVo {
         buyoutPrice: 12999,
         stockCount: 3,
         rentalPlans: [
-          { id: 0, unit: 3, price: 328, minDays: 90 },
-          { id: 0, unit: 1, price: 25, minDays: 30 },
+          { id: 900201, unit: 3, price: 328, minDays: 90 },
+          { id: 900202, unit: 1, price: 25, minDays: 30 },
         ],
       },
     ],
