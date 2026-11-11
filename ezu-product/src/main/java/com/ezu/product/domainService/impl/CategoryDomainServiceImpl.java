@@ -3,6 +3,7 @@ package com.ezu.product.domainService.impl;
 import cn.hutool.core.bean.BeanUtil;
 import com.ezu.common.exception.BusinessException;
 import com.ezu.product.domain.entity.Category;
+import com.ezu.product.domain.enums.CategoryStatus;
 import com.ezu.product.domain.req.CategorySaveReq;
 import com.ezu.product.domain.vo.CategoryTreeVo;
 import com.ezu.product.domainService.CategoryDomainService;
@@ -57,6 +58,36 @@ public class CategoryDomainServiceImpl implements CategoryDomainService {
             } else {
                 // 父级缺失（脏数据）：挂到根，避免节点丢失
                 roots.add(vo);
+            }
+        }
+        return roots;
+    }
+
+    @Override
+    public List<CategoryTreeVo> enabledTree() {
+        List<CategoryTreeVo> vos = categoryRepository.lambdaQuery()
+                .eq(Category::getStatus, CategoryStatus.ENABLED)
+                .orderByAsc(Category::getSort)
+                .orderByAsc(Category::getId)
+                .list().stream()
+                .map(category -> {
+                    CategoryTreeVo vo = new CategoryTreeVo();
+                    BeanUtil.copyProperties(category, vo);
+                    return vo;
+                })
+                .collect(Collectors.toList());
+        Map<Long, CategoryTreeVo> idMap = vos.stream()
+                .collect(Collectors.toMap(CategoryTreeVo::getId, Function.identity()));
+        List<CategoryTreeVo> roots = new ArrayList<>();
+        for (CategoryTreeVo vo : vos) {
+            if (vo.getParentId() == ROOT_PARENT_ID) {
+                roots.add(vo);
+                continue;
+            }
+            // 二级品类：父级不在启用集（被禁用）时随父级整体不出现，不提升到根
+            CategoryTreeVo parent = idMap.get(vo.getParentId());
+            if (parent != null) {
+                parent.getChildren().add(vo);
             }
         }
         return roots;

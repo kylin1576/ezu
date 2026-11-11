@@ -2,9 +2,12 @@ package com.ezu.product.domainService;
 
 import com.ezu.common.page.PageVo;
 import com.ezu.common.response.BatchOperateResultVo;
+import com.ezu.product.domain.req.AppProductQueryReq;
 import com.ezu.product.domain.req.ShelfReq;
 import com.ezu.product.domain.req.SpuQueryReq;
 import com.ezu.product.domain.req.SpuSaveReq;
+import com.ezu.product.domain.vo.AppProductDetailVo;
+import com.ezu.product.domain.vo.AppProductListVo;
 import com.ezu.product.domain.vo.SpuDetailVo;
 import com.ezu.product.domain.vo.SpuListVo;
 
@@ -32,4 +35,14 @@ public interface ProductDomainService {
      * 批量上下架（不存在或状态已符合的计入跳过，successList 放 productNo）
      */
     BatchOperateResultVo shelf(ShelfReq req);
+
+    /**
+     * C端商品分页（仅上架SPU；最低租金起（启用SKU的启用方案）+ 在库可租数合计）
+     */
+    PageVo<AppProductListVo> queryAppPage(AppProductQueryReq req);
+
+    /**
+     * C端商品详情（仅上架SPU；只返回启用SKU及其启用方案，各SKU带在库可租数）
+     */
+    AppProductDetailVo appDetail(Long id);
 }

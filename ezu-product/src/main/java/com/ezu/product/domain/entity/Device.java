@@ -25,7 +25,11 @@ public class Device extends BaseEntity {
     /** 所属SKU ID */
     private Long skuId;
 
-    /** 设备状态（1=在库，2=锁定，3=在租，4=维修，5=报废，6=归还验收中；状态机见 03_设备资产域.sql） */
+    /**
+     * 设备状态（1=在库，2=锁定，3=在租，4=维修，5=报废，6=归还验收中）
+     * <p>
+     * {@link com.ezu.product.domain.enums.DeviceStatus}
+     */
     private Integer status;
 
     /** 成色定级（1=全新，2=准新，3=轻微使用痕迹，4=明显使用痕迹） */

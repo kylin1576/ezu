@@ -16,6 +16,11 @@ public interface CategoryDomainService {
     List<CategoryTreeVo> tree();
 
     /**
+     * 启用品类两级树（C端；禁用品类及其子品类不出现）
+     */
+    List<CategoryTreeVo> enabledTree();
+
+    /**
      * 保存品类（id为空=新增，非空=编辑；parentId≠0 时校验父级存在且为顶级）
      */
     Long save(CategorySaveReq req);

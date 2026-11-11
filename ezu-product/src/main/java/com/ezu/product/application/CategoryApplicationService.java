@@ -26,6 +26,13 @@ public class CategoryApplicationService {
     }
 
     /**
+     * 启用品类两级树（C端；禁用品类及其子品类不出现）
+     */
+    public List<CategoryTreeVo> enabledTree() {
+        return categoryDomainService.enabledTree();
+    }
+
+    /**
      * 新增/编辑品类
      */
     @Transactional(rollbackFor = Exception.class)

@@ -2,9 +2,12 @@ package com.ezu.product.application;
 
 import com.ezu.common.page.PageVo;
 import com.ezu.common.response.BatchOperateResultVo;
+import com.ezu.product.domain.req.AppProductQueryReq;
 import com.ezu.product.domain.req.ShelfReq;
 import com.ezu.product.domain.req.SpuQueryReq;
 import com.ezu.product.domain.req.SpuSaveReq;
+import com.ezu.product.domain.vo.AppProductDetailVo;
+import com.ezu.product.domain.vo.AppProductListVo;
 import com.ezu.product.domain.vo.SpuDetailVo;
 import com.ezu.product.domain.vo.SpuListVo;
 import com.ezu.product.domainService.ProductDomainService;
@@ -49,5 +52,19 @@ public class ProductApplicationService {
     @Transactional(rollbackFor = Exception.class)
     public BatchOperateResultVo shelf(ShelfReq req) {
         return productDomainService.shelf(req);
+    }
+
+    /**
+     * C端商品列表（仅上架）
+     */
+    public PageVo<AppProductListVo> appList(AppProductQueryReq req) {
+        return productDomainService.queryAppPage(req);
+    }
+
+    /**
+     * C端商品详情（仅上架；非上架抛「商品不存在或已下架」）
+     */
+    public AppProductDetailVo appDetail(Long id) {
+        return productDomainService.appDetail(id);
     }
 }

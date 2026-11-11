@@ -16,13 +16,17 @@ import com.ezu.product.domain.entity.ProductSku;
 import com.ezu.product.domain.entity.RentalPlan;
 import com.ezu.product.domain.enums.ProductStatus;
 import com.ezu.product.domain.enums.SkuStatus;
+import com.ezu.product.domain.req.AppProductQueryReq;
 import com.ezu.product.domain.req.ShelfReq;
 import com.ezu.product.domain.req.SpuQueryReq;
 import com.ezu.product.domain.req.SpuSaveReq;
+import com.ezu.product.domain.vo.AppProductDetailVo;
+import com.ezu.product.domain.vo.AppProductListVo;
 import com.ezu.product.domain.vo.SpuDetailVo;
 import com.ezu.product.domain.vo.SpuListVo;
 import com.ezu.product.domainService.ProductDomainService;
 import com.ezu.product.repository.CategoryRepository;
+import com.ezu.product.repository.DeviceRepository;
 import com.ezu.product.repository.ProductParamRepository;
 import com.ezu.product.repository.ProductRepository;
 import com.ezu.product.repository.ProductSkuRepository;
@@ -33,6 +37,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -58,6 +63,7 @@ public class ProductDomainServiceImpl implements ProductDomainService {
     private final ProductSkuRepository productSkuRepository;
     private final RentalPlanRepository rentalPlanRepository;
     private final ProductParamRepository productParamRepository;
+    private final DeviceRepository deviceRepository;
     private final NoGenerator noGenerator;
 
     @Override
@@ -244,5 +250,100 @@ public class ProductDomainServiceImpl implements ProductDomainService {
             return param;
         }).collect(Collectors.toList());
         productParamRepository.saveBatch(params);
+    }
+
+    @Override
+    public PageVo<AppProductListVo> queryAppPage(AppProductQueryReq req) {
+        IPage<Product> page = productRepository.queryAppPage(req);
+        List<Product> records = page.getRecords();
+        if (records.isEmpty()) {
+            return new PageVo<>(page.getTotal(), new ArrayList<>());
+        }
+        // 第一轮批量：品类名回显
+        Set<Long> categoryIds = records.stream().map(Product::getCategoryId).collect(Collectors.toSet());
+        Map<Long, String> categoryNameMap = categoryRepository.listByIds(categoryIds).stream()
+                .collect(Collectors.toMap(Category::getId, Category::getName));
+        // 第二轮批量：启用 SKU → 启用方案
+        List<Long> productIds = records.stream().map(Product::getId).collect(Collectors.toList());
+        Map<Long, List<ProductSku>> skuMap = productSkuRepository.listByProductIds(productIds).stream()
+                .filter(sku -> sku.getStatus() != null && sku.getStatus() == SkuStatus.ENABLED)
+                .collect(Collectors.groupingBy(ProductSku::getProductId));
+        List<Long> skuIds = skuMap.values().stream()
+                .flatMap(List::stream)
+                .map(ProductSku::getId)
+                .collect(Collectors.toList());
+        Map<Long, List<RentalPlan>> planMap = rentalPlanRepository.listBySkuIds(skuIds).stream()
+                .filter(plan -> plan.getStatus() != null && plan.getStatus() == SkuStatus.ENABLED)
+                .collect(Collectors.groupingBy(RentalPlan::getSkuId));
+        // 第三轮批量：在库设备数按 SKU 一次 GROUP 计数
+        Map<Long, Integer> stockMap = deviceRepository.countInStockBySkuIds(skuIds);
+        List<AppProductListVo> list = records.stream().map(product -> {
+            AppProductListVo vo = new AppProductListVo();
+            BeanUtil.copyProperties(product, vo);
+            vo.setCategoryName(categoryNameMap.get(product.getCategoryId()));
+            List<ProductSku> skus = skuMap.getOrDefault(product.getId(), Collections.emptyList());
+            // 最低租金起：全部启用SKU的启用方案取 price 最小者，同时记录其计费单位
+            RentalPlan minPlan = skus.stream()
+                    .flatMap(sku -> planMap.getOrDefault(sku.getId(), Collections.emptyList()).stream())
+                    .min(Comparator.comparing(RentalPlan::getPrice))
+                    .orElse(null);
+            if (minPlan != null) {
+                vo.setMinRentPrice(minPlan.getPrice());
+                vo.setMinRentUnit(minPlan.getUnit());
+            }
+            vo.setStockCount(skus.stream()
+                    .mapToInt(sku -> stockMap.getOrDefault(sku.getId(), 0))
+                    .sum());
+            return vo;
+        }).collect(Collectors.toList());
+        // pageSize=-1 全量时 MP 跳过 count 查询，total 以实际条数回填
+        long total = req.getPageSize() == -1 ? list.size() : page.getTotal();
+        return new PageVo<>(total, list);
+    }
+
+    @Override
+    public AppProductDetailVo appDetail(Long id) {
+        Product product = productRepository.getById(id);
+        if (product == null || !Objects.equals(product.getStatus(), ProductStatus.ON_SHELF)) {
+            throw new BusinessException("商品不存在或已下架");
+        }
+        AppProductDetailVo vo = new AppProductDetailVo();
+        BeanUtil.copyProperties(product, vo);
+        if (StrUtil.isNotBlank(product.getImages())) {
+            vo.setImages(JSONUtil.toList(product.getImages(), String.class));
+        }
+        Category category = categoryRepository.getById(product.getCategoryId());
+        if (category != null) {
+            vo.setCategoryName(category.getName());
+        }
+        // 启用 SKU → 启用方案 + 在库可租数（各一轮批量）
+        List<ProductSku> skus = productSkuRepository.listByProductIds(Collections.singletonList(id)).stream()
+                .filter(sku -> sku.getStatus() != null && sku.getStatus() == SkuStatus.ENABLED)
+                .collect(Collectors.toList());
+        List<Long> skuIds = skus.stream().map(ProductSku::getId).collect(Collectors.toList());
+        Map<Long, List<RentalPlan>> planMap = rentalPlanRepository.listBySkuIds(skuIds).stream()
+                .filter(plan -> plan.getStatus() != null && plan.getStatus() == SkuStatus.ENABLED)
+                .collect(Collectors.groupingBy(RentalPlan::getSkuId));
+        Map<Long, Integer> stockMap = deviceRepository.countInStockBySkuIds(skuIds);
+        vo.setSkus(skus.stream().map(sku -> {
+            AppProductDetailVo.SkuVo skuVo = new AppProductDetailVo.SkuVo();
+            BeanUtil.copyProperties(sku, skuVo);
+            skuVo.setStockCount(stockMap.getOrDefault(sku.getId(), 0));
+            skuVo.setRentalPlans(planMap.getOrDefault(sku.getId(), Collections.emptyList()).stream().map(plan -> {
+                AppProductDetailVo.PlanVo planVo = new AppProductDetailVo.PlanVo();
+                BeanUtil.copyProperties(plan, planVo);
+                return planVo;
+            }).collect(Collectors.toList()));
+            return skuVo;
+        }).collect(Collectors.toList()));
+        vo.setStockCount(vo.getSkus().stream()
+                .mapToInt(AppProductDetailVo.SkuVo::getStockCount)
+                .sum());
+        vo.setParams(productParamRepository.listByProductId(id).stream().map(param -> {
+            AppProductDetailVo.ParamVo paramVo = new AppProductDetailVo.ParamVo();
+            BeanUtil.copyProperties(param, paramVo);
+            return paramVo;
+        }).collect(Collectors.toList()));
+        return vo;
     }
 }
