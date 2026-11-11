@@ -8,6 +8,14 @@ export const STORAGE_KEYS = {
   TOKEN: "ezu-token",
   /** 用户信息缓存 */
   USER_INFO: "ezu-user-info",
+  /** 订单列表页目标 tab（我的页 → 订单 tab 页，switchTab 不能带参） */
+  ORDER_TAB: "ezu-order-tab",
+} as const;
+
+/** 跨页面事件名（uni.$on / uni.$emit） */
+export const EVENTS = {
+  /** 地址选择回传（订单确认页 → 地址列表 select 模式），payload: AddressVo */
+  ADDRESS_SELECTED: "address-selected",
 } as const;
 
 /** token 请求头名称（后端 Sa-Token 双账号体系约定） */

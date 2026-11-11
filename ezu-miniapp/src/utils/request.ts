@@ -110,8 +110,8 @@ export function request<T>(options: RequestOptions): Promise<T> {
   });
 }
 
-export function get<T>(url: string, data?: AnyObject): Promise<T> {
-  return request<T>({ url, method: "GET", data });
+export function get<T>(url: string, data?: AnyObject, autoRedirect = true): Promise<T> {
+  return request<T>({ url, method: "GET", data, autoRedirect });
 }
 
 export function post<T>(url: string, data?: AnyObject, autoRedirect = true): Promise<T> {
