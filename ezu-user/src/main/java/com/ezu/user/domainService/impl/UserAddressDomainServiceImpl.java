@@ -67,6 +67,12 @@ public class UserAddressDomainServiceImpl implements UserAddressDomainService {
         userAddressRepository.removeById(id);
     }
 
+    @Override
+    public UserAddress getByIdAndUserId(Long id, Long userId) {
+        UserAddress address = userAddressRepository.getById(id);
+        return address != null && address.getUserId().equals(userId) ? address : null;
+    }
+
     /**
      * 归属校验：地址必须存在且属于当前用户
      */

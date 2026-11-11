@@ -51,6 +51,9 @@ public class DeviceDomainServiceImpl implements DeviceDomainService {
     /** 报告类型：入库质检 */
     private static final int CHECK_TYPE_INBOUND = 1;
 
+    /** 锁定候选数量：一次取 5 台逐台 CAS，覆盖常见并发度后快速失败（单遍 bounded） */
+    private static final int LOCK_CANDIDATES = 5;
+
     private final DeviceRepository deviceRepository;
     private final DeviceCheckReportRepository deviceCheckReportRepository;
     private final DeviceRepairRepository deviceRepairRepository;
@@ -187,17 +190,28 @@ public class DeviceDomainServiceImpl implements DeviceDomainService {
 
     @Override
     public Long lockDevice(Long skuId) {
-        // 单次 CAS 尝试：候选机 + 条件更新 1→2，并发被抢走则本次返回 null（重试由调用方负责）
-        Device candidate = deviceRepository.selectFirstInStock(skuId);
-        if (candidate == null) {
-            return null;
+        // 单遍 bounded：候选只查一次（5台），逐台条件更新 1→2，任一成功即返回；
+        // 禁止事务内重查候选重试——REPEATABLE READ 快照不刷新，重查结果不变会死循环
+        List<Device> candidates = deviceRepository.selectInStockCandidates(skuId, LOCK_CANDIDATES);
+        if (candidates.isEmpty()) {
+            // 候选为空两种可能：真无库存 / 并发瞬间被锁完，按同一快照的在库计数分流文案
+            Integer available = deviceRepository.countInStockBySkuIds(List.of(skuId)).get(skuId);
+            if (available == null || available == 0) {
+                throw new BusinessException("商品【{}】已无可租设备", resolveProductName(skuId));
+            }
+            throw new BusinessException("商品可租设备已被抢租，请重试");
         }
-        boolean locked = deviceRepository.lambdaUpdate()
-                .eq(Device::getId, candidate.getId())
-                .eq(Device::getStatus, DeviceStatus.IN_STOCK)
-                .set(Device::getStatus, DeviceStatus.LOCKED)
-                .update();
-        return locked ? candidate.getId() : null;
+        for (Device candidate : candidates) {
+            boolean locked = deviceRepository.lambdaUpdate()
+                    .eq(Device::getId, candidate.getId())
+                    .eq(Device::getStatus, DeviceStatus.IN_STOCK)
+                    .set(Device::getStatus, DeviceStatus.LOCKED)
+                    .update();
+            if (locked) {
+                return candidate.getId();
+            }
+        }
+        throw new BusinessException("商品可租设备已被抢租，请重试");
     }
 
     @Override
@@ -223,6 +237,20 @@ public class DeviceDomainServiceImpl implements DeviceDomainService {
     @Override
     public Map<Long, Integer> countAvailable(List<Long> skuIds) {
         return deviceRepository.countInStockBySkuIds(skuIds);
+    }
+
+    /**
+     * 无库存报错用的商品名称：SKU→SPU 名称回查；SKU/SPU 已删（SPU 编辑为全删全插）时降级为 SKU ID
+     */
+    private String resolveProductName(Long skuId) {
+        ProductSku sku = productSkuRepository.getById(skuId);
+        if (sku != null) {
+            Product product = productRepository.getById(sku.getProductId());
+            if (product != null) {
+                return product.getName();
+            }
+        }
+        return String.valueOf(skuId);
     }
 
     /**

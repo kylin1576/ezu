@@ -18,6 +18,17 @@
             <groupId>com.ezu</groupId>
             <artifactId>ezu-common</artifactId>
         </dependency>
+        <!-- 下单链路跨模块：ezu-product（CAS锁设备/商品快照）、ezu-user（收货地址校验），依赖严格单向 order → product/user -->
+        <dependency>
+            <groupId>com.ezu</groupId>
+            <artifactId>ezu-product</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.ezu</groupId>
+            <artifactId>ezu-user</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

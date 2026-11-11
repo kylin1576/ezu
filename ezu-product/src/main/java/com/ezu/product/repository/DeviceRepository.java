@@ -41,15 +41,15 @@ public class DeviceRepository extends ServiceImpl<DeviceMapper, Device> {
     }
 
     /**
-     * 取指定SKU下 id 最小的一台在库设备（锁定预占候选；单台）
+     * 取指定SKU下 id 升序的前 N 台在库设备（锁定预占候选；逐台 CAS 条件更新由 DomainService 负责）
      */
-    public Device selectFirstInStock(Long skuId) {
+    public List<Device> selectInStockCandidates(Long skuId, int limit) {
         return this.lambdaQuery()
                 .eq(Device::getSkuId, skuId)
                 .eq(Device::getStatus, DeviceStatus.IN_STOCK)
                 .orderByAsc(Device::getId)
-                .last("LIMIT 1")
-                .one();
+                .last("LIMIT " + limit)
+                .list();
     }
 
     /**

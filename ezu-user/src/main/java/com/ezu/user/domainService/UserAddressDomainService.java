@@ -2,6 +2,7 @@ package com.ezu.user.domainService;
 
 import com.ezu.common.page.PageQuery;
 import com.ezu.common.page.PageVo;
+import com.ezu.user.domain.entity.UserAddress;
 import com.ezu.user.domain.req.AddressSaveReq;
 import com.ezu.user.domain.vo.AddressVo;
 
@@ -24,4 +25,9 @@ public interface UserAddressDomainService {
      * 删除地址（校验归属后逻辑删）
      */
     void delete(Long userId, Long id);
+
+    /**
+     * 按ID+用户查询地址（ezu-order 下单校验用），不存在或不属该用户返回 null
+     */
+    UserAddress getByIdAndUserId(Long id, Long userId);
 }
