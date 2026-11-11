@@ -23,7 +23,7 @@
         v-for="item in categories"
         :key="item.id"
         class="kingkong-item"
-        @tap="goCategory(item.id)"
+        @tap="goCategory()"
       >
         <view class="kingkong-icon" :style="{ backgroundColor: item.bg }">
           <wd-icon :name="item.icon" size="48rpx" :color="item.color" />
@@ -40,38 +40,36 @@
         <view class="section-line" />
       </view>
       <view class="goods-grid">
-        <view
+        <goods-card
           v-for="goods in goodsList"
           :key="goods.id"
-          class="goods-card"
-          @tap="goGoodsDetail(goods.id)"
-        >
-          <!-- TODO(M3c): 换真实商品图 -->
-          <view class="goods-img" :style="{ backgroundColor: goods.bg }" />
-          <view class="goods-info">
-            <text class="goods-title ezu-ellipsis-2">{{ goods.title }}</text>
-            <view class="goods-bottom">
-              <view class="ezu-price goods-price">
-                {{ goods.price.toFixed(2) }}
-              </view>
-              <text class="goods-unit">/月</text>
-            </view>
-          </view>
-        </view>
+          class="goods-grid-item"
+          :id="goods.id"
+          :name="goods.name"
+          :subtitle="goods.subtitle ?? ''"
+          :image="goods.mainImage ?? ''"
+          :price="goods.minRentPrice"
+          :unit="goods.minRentUnit"
+        />
       </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-/** 顶部 banner mock */
+import { ref } from "vue";
+import { onLoad } from "@dcloudio/uni-app";
+import GoodsCard from "@/components/goods-card/goods-card.vue";
+import { productList, type AppProductListVo } from "@/api/product";
+
+/** 顶部 banner mock（M3d 接运营位接口后替换） */
 interface BannerMock {
   id: number;
   title: string;
   color: string;
 }
 
-/** 金刚区品类 mock */
+/** 金刚区品类 mock（后端品类树就绪后接 category/list） */
 interface CategoryEntryMock {
   id: number;
   name: string;
@@ -80,15 +78,6 @@ interface CategoryEntryMock {
   bg: string;
 }
 
-/** 推荐商品 mock */
-interface GoodsMock {
-  id: number;
-  title: string;
-  price: number;
-  bg: string;
-}
-
-// TODO(M3c): 以下均为本地 mock，待商品接口就绪后替换为 /api/app/goods/**
 const banners: BannerMock[] = [
   { id: 1, title: "新机首发 · 0 押金起租", color: "linear-gradient(135deg, #e93b3d, #ff8a65)" },
   { id: 2, title: "数码好物 · 低至 3 折日租", color: "linear-gradient(135deg, #1e3a8a, #4f9dff)" },
@@ -102,28 +91,42 @@ const categories: CategoryEntryMock[] = [
   { id: 4, name: "智能设备", icon: "video", color: "#10b981", bg: "#ecfdf5" },
 ];
 
-const goodsList: GoodsMock[] = [
-  { id: 1, title: "Apple MacBook Pro 14 M3 18G+512G 深空灰", price: 328, bg: "#fdeeee" },
-  { id: 2, title: "iPhone 16 Pro 256G 原色钛金属", price: 299, bg: "#eff6ff" },
-  { id: 3, title: "Sony A7M4 全画幅微单相机机身", price: 456, bg: "#fef3c7" },
-  { id: 4, title: "DJI Mavic 3 Pro 无人机畅飞套装", price: 388, bg: "#ecfdf5" },
-];
+/** 推荐流（真实接口失败时降级本地 mock，不白屏） */
+const goodsList = ref<AppProductListVo[]>(buildMockGoods());
+
+// MOCK FALLBACK(T5 未就绪)：结构与 AppProductListVo 对齐，id 与真实商品不冲突也无下单风险（仅浏览跳详情）
+function buildMockGoods(): AppProductListVo[] {
+  return [
+    { id: 900001, name: "Apple MacBook Pro 14 M3 18G+512G 深空灰", subtitle: "演示数据 · 接口就绪后展示真实商品", mainImage: "", minRentPrice: 328, minRentUnit: 3 },
+    { id: 900002, name: "iPhone 16 Pro 256G 原色钛金属", subtitle: "演示数据 · 接口就绪后展示真实商品", mainImage: "", minRentPrice: 299, minRentUnit: 3 },
+    { id: 900003, name: "Sony A7M4 全画幅微单相机机身", subtitle: "演示数据 · 接口就绪后展示真实商品", mainImage: "", minRentPrice: 456, minRentUnit: 3 },
+    { id: 900004, name: "DJI Mavic 3 Pro 无人机畅飞套装", subtitle: "演示数据 · 接口就绪后展示真实商品", mainImage: "", minRentPrice: 388, minRentUnit: 3 },
+  ];
+}
+
+onLoad(() => {
+  loadRecommend();
+});
+
+async function loadRecommend(): Promise<void> {
+  try {
+    // 浏览面接口：autoRedirect=false（productList 内部已传），失败留 mock
+    const page = await productList({ pageNum: 1, pageSize: 4 });
+    const rows = page?.list ?? [];
+    if (rows.length) goodsList.value = rows;
+  } catch {
+    // 请求层已 toast；保留 mock 渲染
+  }
+}
 
 /** 搜索框点击 → 商品列表页 */
 function goGoodsList(): void {
-  // TODO(M3c): 携带搜索关键字
   uni.navigateTo({ url: "/pages/goods/list" });
 }
 
-/** 金刚区点击 → 分类页并定位 */
-function goCategory(categoryId: number): void {
+/** 金刚区点击 → 分类 tab（switchTab 不能带参，定位能力 M3d 评估） */
+function goCategory(): void {
   uni.switchTab({ url: "/pages/category/index" });
-  // TODO(M3c): 通过事件/全局状态把 categoryId 传给分类页定位
-}
-
-/** 商品卡点击 → 商品详情 */
-function goGoodsDetail(goodsId: number): void {
-  uni.navigateTo({ url: `/pages/goods/detail?id=${goodsId}` });
 }
 </script>
 
@@ -233,42 +236,7 @@ function goGoodsDetail(goodsId: number): void {
   padding: 16rpx 24rpx 0;
 }
 
-.goods-card {
+.goods-grid-item {
   width: calc(50% - 8rpx);
-  background-color: #ffffff;
-  border-radius: 16rpx;
-  overflow: hidden;
-}
-
-.goods-img {
-  width: 100%;
-  height: 320rpx;
-}
-
-.goods-info {
-  padding: 16rpx 20rpx 20rpx;
-}
-
-.goods-title {
-  font-size: 26rpx;
-  color: $ezu-text-color-base;
-  line-height: 1.4;
-  height: 74rpx;
-}
-
-.goods-bottom {
-  margin-top: 12rpx;
-  display: flex;
-  align-items: baseline;
-  gap: 4rpx;
-}
-
-.goods-price {
-  font-size: 34rpx;
-}
-
-.goods-unit {
-  font-size: 22rpx;
-  color: $ezu-text-color-hint;
 }
 </style>

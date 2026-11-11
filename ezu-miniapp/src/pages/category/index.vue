@@ -22,10 +22,12 @@
             v-for="sub in item.children"
             :key="sub.id"
             class="sub-item"
-            @tap="goGoodsList(item.name, sub.name)"
+            @tap="goGoodsList(sub)"
           >
-            <!-- TODO(M3c): 换真实分类图 -->
-            <view class="sub-img" :style="{ backgroundColor: sub.bg }" />
+            <!-- 图标位：真实数据无 icon 时渲染名称首字占位 -->
+            <view class="sub-img" :style="{ backgroundColor: palette[sub.id % palette.length] }">
+              <text class="sub-img-text">{{ sub.name.slice(0, 1) }}</text>
+            </view>
             <text class="sub-name">{{ sub.name }}</text>
           </view>
         </view>
@@ -36,109 +38,125 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
+import { onLoad } from "@dcloudio/uni-app";
+import { categoryTree } from "@/api/product";
 
-/** 二级分类 mock */
-interface SubCategoryMock {
+/** 页面内统一品类展示结构（真实 CategoryTreeVo / 本地 mock 双向兼容） */
+interface SubCategory {
   id: number;
   name: string;
-  bg: string;
 }
 
-/** 一级分类 mock */
-interface CategoryMock {
+interface TopCategory {
   id: number;
   name: string;
-  children: SubCategoryMock[];
+  children: SubCategory[];
 }
 
-// TODO(M3c): 本地 mock，待品类接口就绪后替换为 /api/app/category/**
-const categoryList: CategoryMock[] = [
-  {
-    id: 1,
-    name: "热门推荐",
-    children: [
-      { id: 11, name: " iPhone ", bg: "#eff6ff" },
-      { id: 12, name: "MacBook", bg: "#fdeeee" },
-      { id: 13, name: "iPad", bg: "#ecfdf5" },
-      { id: 14, name: "Apple Watch", bg: "#fef3c7" },
-      { id: 15, name: "Switch", bg: "#f3e8ff" },
-      { id: 16, name: "无人机", bg: "#fff7ed" },
-    ],
-  },
-  {
-    id: 2,
-    name: "手机通讯",
-    children: [
-      { id: 21, name: "苹果", bg: "#fdeeee" },
-      { id: 22, name: "华为", bg: "#eff6ff" },
-      { id: 23, name: "小米", bg: "#fff7ed" },
-      { id: 24, name: "三星", bg: "#ecfdf5" },
-      { id: 25, name: "折叠屏", bg: "#fef3c7" },
-      { id: 26, name: "备用机", bg: "#f3e8ff" },
-    ],
-  },
-  {
-    id: 3,
-    name: "电脑办公",
-    children: [
-      { id: 31, name: "笔记本", bg: "#eff6ff" },
-      { id: 32, name: "台式机", bg: "#fdeeee" },
-      { id: 33, name: "显示器", bg: "#ecfdf5" },
-      { id: 34, name: "键盘", bg: "#fef3c7" },
-      { id: 35, name: "打印机", bg: "#f3e8ff" },
-      { id: 36, name: "绘图板", bg: "#fff7ed" },
-    ],
-  },
-  {
-    id: 4,
-    name: "摄影摄像",
-    children: [
-      { id: 41, name: "微单相机", bg: "#fef3c7" },
-      { id: 42, name: "单反相机", bg: "#eff6ff" },
-      { id: 43, name: "镜头", bg: "#fdeeee" },
-      { id: 44, name: "运动相机", bg: "#ecfdf5" },
-      { id: 45, name: "稳定器", bg: "#f3e8ff" },
-      { id: 46, name: "直播设备", bg: "#fff7ed" },
-    ],
-  },
-  {
-    id: 5,
-    name: "智能穿戴",
-    children: [
-      { id: 51, name: "智能手表", bg: "#ecfdf5" },
-      { id: 52, name: "智能眼镜", bg: "#eff6ff" },
-      { id: 53, name: "健康监测", bg: "#fef3c7" },
-      { id: 54, name: "VR 设备", bg: "#f3e8ff" },
-    ],
-  },
-  {
-    id: 6,
-    name: "游戏设备",
-    children: [
-      { id: 61, name: "游戏主机", bg: "#fdeeee" },
-      { id: 62, name: "掌机", bg: "#eff6ff" },
-      { id: 63, name: "游戏手柄", bg: "#ecfdf5" },
-      { id: 64, name: "电竞外设", bg: "#fef3c7" },
-    ],
-  },
-  {
-    id: 7,
-    name: "办公设备",
-    children: [
-      { id: 71, name: "投影仪", bg: "#fff7ed" },
-      { id: 72, name: "会议大屏", bg: "#eff6ff" },
-      { id: 73, name: "考勤机", bg: "#fdeeee" },
-    ],
-  },
-];
+/** 二级分类图标位配色（按 id 取模轮换） */
+const palette = ["#eff6ff", "#fdeeee", "#ecfdf5", "#fef3c7", "#f3e8ff", "#fff7ed"];
 
-const activeId = ref<number>(categoryList[0]?.id ?? 0);
+// MOCK FALLBACK(T5 未就绪)：品类树接口失败时降级本地数据，不白屏
+function buildMockTree(): TopCategory[] {
+  return [
+    {
+      id: 9001,
+      name: "热门推荐",
+      children: [
+        { id: 900101, name: "iPhone" },
+        { id: 900102, name: "MacBook" },
+        { id: 900103, name: "iPad" },
+        { id: 900104, name: "Apple Watch" },
+        { id: 900105, name: "Switch" },
+        { id: 900106, name: "无人机" },
+      ],
+    },
+    {
+      id: 9002,
+      name: "手机通讯",
+      children: [
+        { id: 900201, name: "苹果" },
+        { id: 900202, name: "华为" },
+        { id: 900203, name: "小米" },
+        { id: 900204, name: "三星" },
+        { id: 900205, name: "折叠屏" },
+        { id: 900206, name: "备用机" },
+      ],
+    },
+    {
+      id: 9003,
+      name: "电脑办公",
+      children: [
+        { id: 900301, name: "笔记本" },
+        { id: 900302, name: "台式机" },
+        { id: 900303, name: "显示器" },
+        { id: 900304, name: "键盘" },
+        { id: 900305, name: "打印机" },
+      ],
+    },
+    {
+      id: 9004,
+      name: "摄影摄像",
+      children: [
+        { id: 900401, name: "微单相机" },
+        { id: 900402, name: "单反相机" },
+        { id: 900403, name: "镜头" },
+        { id: 900404, name: "运动相机" },
+        { id: 900405, name: "稳定器" },
+      ],
+    },
+    {
+      id: 9005,
+      name: "智能穿戴",
+      children: [
+        { id: 900501, name: "智能手表" },
+        { id: 900502, name: "智能眼镜" },
+        { id: 900503, name: "VR 设备" },
+      ],
+    },
+    {
+      id: 9006,
+      name: "游戏设备",
+      children: [
+        { id: 900601, name: "游戏主机" },
+        { id: 900602, name: "掌机" },
+        { id: 900603, name: "游戏手柄" },
+      ],
+    },
+  ];
+}
 
-/** 二级分类点击 → 商品列表（按分类过滤） */
-function goGoodsList(categoryName: string, subName: string): void {
-  // TODO(M3c): 传分类 id，由商品列表接口按分类查询
+const categoryList = ref<TopCategory[]>(buildMockTree());
+const activeId = ref<number>(categoryList.value[0]?.id ?? 0);
+
+onLoad(() => {
+  loadTree();
+});
+
+async function loadTree(): Promise<void> {
+  try {
+    // 浏览面接口：autoRedirect=false（categoryTree 内部已传）
+    const tree = await categoryTree();
+    const mapped = (tree ?? [])
+      .filter((top) => (top.children?.length ?? 0) > 0)
+      .map((top) => ({
+        id: top.id,
+        name: top.name,
+        children: (top.children ?? []).map((sub) => ({ id: sub.id, name: sub.name })),
+      }));
+    if (mapped.length) {
+      categoryList.value = mapped;
+      activeId.value = mapped[0]?.id ?? 0;
+    }
+  } catch {
+    // 请求层已 toast；保留 mock 渲染
+  }
+}
+
+/** 二级分类点击 → 商品列表（按二级品类过滤） */
+function goGoodsList(sub: SubCategory): void {
   uni.navigateTo({
-    url: `/pages/goods/list?category=${encodeURIComponent(categoryName)}&sub=${encodeURIComponent(subName)}`,
+    url: `/pages/goods/list?categoryId=${sub.id}&title=${encodeURIComponent(sub.name)}`,
   });
 }
 </script>
@@ -147,7 +165,7 @@ function goGoodsList(categoryName: string, subName: string): void {
 .category-page {
   display: flex;
   /* 微信小程序端 100vh 即页面可用高度（原生 tabBar 已排除）；
-     H5 端 tabBar 为 fixed 覆盖，底部可能被遮 ~88rpx，M3c 统一精调 */
+     H5 端 tabBar 为 fixed 覆盖，底部可能被遮 ~88rpx，长列表滚动区留白 */
   height: 100vh;
 }
 
@@ -222,6 +240,15 @@ function goGoodsList(categoryName: string, subName: string): void {
   width: 120rpx;
   height: 120rpx;
   border-radius: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sub-img-text {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: $ezu-text-color-secondary;
 }
 
 .sub-name {
