@@ -71,6 +71,7 @@
 <script setup lang="ts">
 import { useUserStore } from "@/stores/user";
 import { ensureLogin } from "@/utils/auth";
+import { STORAGE_KEYS } from "@/config";
 
 /** 订单快捷入口（与订单页 tab 对应） */
 interface OrderEntry {
@@ -94,10 +95,10 @@ function onUserCardTap(): void {
   uni.navigateTo({ url: "/pages/login/index" });
 }
 
-/** 订单入口：敏感入口前置拦截 */
+/** 订单入口：敏感入口前置拦截；switchTab 不能带参，经 storage 通知订单页切 tab */
 async function goOrderList(tab: string): Promise<void> {
   if (!(await ensureLogin())) return;
-  // tab 页内无法带参 switchTab，订单页通过 storage/全局状态接收 tab TODO(M3c)
+  uni.setStorageSync(STORAGE_KEYS.ORDER_TAB, tab);
   uni.switchTab({ url: "/pages/order/list" });
 }
 
