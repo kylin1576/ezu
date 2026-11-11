@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import { onLaunch, onShow, onHide } from "@dcloudio/uni-app";
+import { useUserStore } from "@/stores/user";
 
 onLaunch(() => {
-  console.log("App Launch");
+  // store 实例化时 state 自动从 storage 水合（token/userInfo）
+  const userStore = useUserStore();
+  // 已登录则静默刷新用户信息（失败不打扰：401 由请求层统一处理，404 为后端未就绪）
+  if (userStore.isLoggedIn) {
+    userStore.fetchUserInfo().catch(() => undefined);
+  }
 });
 onShow(() => {
   console.log("App Show");
