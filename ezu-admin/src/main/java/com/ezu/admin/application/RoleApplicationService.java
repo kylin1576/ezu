@@ -7,6 +7,7 @@ import com.ezu.admin.domainService.RoleDomainService;
 import com.ezu.common.page.PageVo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 后台角色应用服务
@@ -27,6 +28,7 @@ public class RoleApplicationService {
     /**
      * 新增/编辑角色
      */
+    @Transactional(rollbackFor = Exception.class)
     public Long save(RoleSaveReq req) {
         return roleDomainService.save(req);
     }

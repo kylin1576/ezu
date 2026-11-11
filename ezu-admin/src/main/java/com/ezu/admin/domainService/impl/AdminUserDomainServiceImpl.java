@@ -6,12 +6,14 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.ezu.admin.domain.entity.AdminUser;
 import com.ezu.admin.domain.entity.AdminUserRole;
+import com.ezu.admin.domain.entity.Role;
 import com.ezu.admin.domain.req.AdminUserQueryReq;
 import com.ezu.admin.domain.req.AdminUserSaveReq;
 import com.ezu.admin.domain.vo.AdminUserListVo;
 import com.ezu.admin.domainService.AdminUserDomainService;
 import com.ezu.admin.repository.AdminUserRepository;
 import com.ezu.admin.repository.AdminUserRoleRepository;
+import com.ezu.admin.repository.RoleRepository;
 import com.ezu.common.exception.BusinessException;
 import com.ezu.common.page.PageVo;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -33,6 +36,7 @@ public class AdminUserDomainServiceImpl implements AdminUserDomainService {
 
     private final AdminUserRepository adminUserRepository;
     private final AdminUserRoleRepository adminUserRoleRepository;
+    private final RoleRepository roleRepository;
 
     @Override
     public PageVo<AdminUserListVo> queryPage(AdminUserQueryReq req) {
@@ -90,20 +94,40 @@ public class AdminUserDomainServiceImpl implements AdminUserDomainService {
     }
 
     /**
-     * 绑定角色：全删全插
+     * 绑定角色：先批量校验角色存在，再全删全插
      */
     private void bindRoles(Long adminUserId, List<Long> roleIds) {
+        List<Long> distinctRoleIds = roleIds.stream().distinct().collect(Collectors.toList());
+        checkRolesExist(distinctRoleIds);
         adminUserRoleRepository.removeByAdminUserId(adminUserId);
-        if (CollectionUtil.isEmpty(roleIds)) {
+        if (CollectionUtil.isEmpty(distinctRoleIds)) {
             return;
         }
-        List<AdminUserRole> relations = roleIds.stream().distinct().map(roleId -> {
+        List<AdminUserRole> relations = distinctRoleIds.stream().map(roleId -> {
             AdminUserRole relation = new AdminUserRole();
             relation.setAdminUserId(adminUserId);
             relation.setRoleId(roleId);
             return relation;
         }).collect(Collectors.toList());
         adminUserRoleRepository.saveBatch(relations);
+    }
+
+    /**
+     * 角色存在性校验：单次批量 IN 查询，缺失即抛业务异常
+     */
+    private void checkRolesExist(List<Long> roleIds) {
+        if (CollectionUtil.isEmpty(roleIds)) {
+            return;
+        }
+        Set<Long> existRoleIds = roleRepository.listByIds(roleIds).stream()
+                .map(Role::getId)
+                .collect(Collectors.toSet());
+        roleIds.stream()
+                .filter(roleId -> !existRoleIds.contains(roleId))
+                .findFirst()
+                .ifPresent(roleId -> {
+                    throw new BusinessException("角色ID【{}】不存在", roleId);
+                });
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.ezu.admin.api;
 
+import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.ezu.admin.application.RoleApplicationService;
 import com.ezu.admin.domain.req.RoleQueryReq;
 import com.ezu.admin.domain.req.RoleSaveReq;
@@ -36,9 +37,11 @@ public class RoleController {
     /**
      * 新增/编辑角色
      */
+    @SaCheckPermission(value = "role:save", type = "admin")
     @OperateLog(module = "系统管理", operation = "保存角色")
     @PostMapping("/save")
     public ResultData<Long> save(@Validated @RequestBody RoleSaveReq req) {
         return ResultData.success(roleApplicationService.save(req));
     }
 }
+

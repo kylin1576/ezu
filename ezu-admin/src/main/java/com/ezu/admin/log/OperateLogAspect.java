@@ -17,6 +17,9 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * 操作日志切面：环绕 @OperateLog 方法，业务成功后同步落库 t_operate_log；
@@ -27,6 +30,21 @@ import java.time.LocalDateTime;
 @Component
 @RequiredArgsConstructor
 public class OperateLogAspect {
+
+    /** params 列最大长度（超出截断，防 text 列膨胀） */
+    private static final int MAX_PARAMS_LENGTH = 4000;
+
+    /** 敏感字段值脱敏占位 */
+    private static final String MASKED_VALUE = "***";
+
+    /**
+     * 敏感 key 清单（小写）：序列化结果中命中（大小写不敏感）的 key，值统一替换为 ***，防止明文密码/密钥落库
+     */
+    private static final String[] SENSITIVE_KEYS = {"password", "oldpassword", "newpassword", "secret", "token"};
+
+    /** 敏感 key 脱敏正则：捕获组1保留原 key（含原始大小写），值整体替换 */
+    private static final Pattern SENSITIVE_KEY_PATTERN = Pattern.compile(
+            "(?i)(\"(?:" + String.join("|", SENSITIVE_KEYS) + ")\")\\s*:\\s*\"[^\"]*\"");
 
     private final OperateLogRepository operateLogRepository;
 
@@ -65,15 +83,29 @@ public class OperateLogAspect {
     }
 
     /**
-     * 参数 JSON 序列化，失败记 null
+     * 参数序列化：仅序列化 com.ezu 包内的业务参数（Servlet/文件等非业务参数记简单类名占位），
+     * 先做敏感 key 脱敏再截断到 MAX_PARAMS_LENGTH（先截断会把脱敏片段截半露出密文）；失败记 null
      */
     private String toJsonOrNull(Object[] args) {
         try {
-            return JSONUtil.toJsonStr(args);
+            List<Object> serializableArgs = new ArrayList<>(args.length);
+            for (Object arg : args) {
+                serializableArgs.add(isBizParam(arg) ? arg : arg.getClass().getSimpleName());
+            }
+            String json = JSONUtil.toJsonStr(serializableArgs);
+            String masked = SENSITIVE_KEY_PATTERN.matcher(json).replaceAll("$1:\"" + MASKED_VALUE + "\"");
+            return StrUtil.subPre(masked, MAX_PARAMS_LENGTH);
         } catch (Exception e) {
             log.warn("操作日志参数序列化失败", e);
             return null;
         }
+    }
+
+    /**
+     * 是否业务参数：null 与非 com.ezu 包对象（HttpServletRequest/Response、MultipartFile、BindingResult 等）不参与序列化
+     */
+    private boolean isBizParam(Object arg) {
+        return arg != null && arg.getClass().getPackageName().startsWith("com.ezu");
     }
 
     /**

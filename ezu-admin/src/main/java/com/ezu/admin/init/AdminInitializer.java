@@ -70,7 +70,7 @@ public class AdminInitializer implements ApplicationRunner {
         adminUser.setRealName("超级管理员");
         adminUser.setStatus(AdminUserStatus.ENABLED);
         adminUserRepository.save(adminUser);
-        log.info("初始化超管账号：admin/admin123");
+        log.info("初始化默认超管账号完成（初始口令见部署文档）");
         return adminUser;
     }
 
@@ -102,7 +102,8 @@ public class AdminInitializer implements ApplicationRunner {
         Permission system = insertPermission(0L, "系统管理", PermissionType.CATALOG, null, "/system", "system", 10);
         Permission userMenu = insertPermission(system.getId(), "账号管理", PermissionType.MENU, null, "/system/user", "user", 10);
         insertPermission(userMenu.getId(), "新增/编辑账号", PermissionType.BUTTON, "user:save", null, null, 10);
-        insertPermission(system.getId(), "角色管理", PermissionType.MENU, null, "/system/role", "role", 20);
+        Permission roleMenu = insertPermission(system.getId(), "角色管理", PermissionType.MENU, null, "/system/role", "role", 20);
+        insertPermission(roleMenu.getId(), "新增/编辑角色", PermissionType.BUTTON, "role:save", null, null, 10);
         // 商品管理
         Permission product = insertPermission(0L, "商品管理", PermissionType.CATALOG, null, "/product", "goods", 20);
         Permission categoryMenu = insertPermission(product.getId(), "品类管理", PermissionType.MENU, null, "/product/category", "tree", 10);

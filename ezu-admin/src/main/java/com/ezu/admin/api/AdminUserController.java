@@ -1,5 +1,6 @@
 package com.ezu.admin.api;
 
+import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.ezu.admin.application.AdminUserApplicationService;
 import com.ezu.admin.domain.req.AdminUserQueryReq;
 import com.ezu.admin.domain.req.AdminUserSaveReq;
@@ -36,9 +37,11 @@ public class AdminUserController {
     /**
      * 新增/编辑账号
      */
+    @SaCheckPermission(value = "user:save", type = "admin")
     @OperateLog(module = "系统管理", operation = "保存后台账号")
     @PostMapping("/save")
     public ResultData<Long> save(@Validated @RequestBody AdminUserSaveReq req) {
         return ResultData.success(adminUserApplicationService.save(req));
     }
 }
+
