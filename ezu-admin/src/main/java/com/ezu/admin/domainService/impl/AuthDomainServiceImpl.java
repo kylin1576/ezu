@@ -31,7 +31,7 @@ import java.util.Objects;
  * 认证领域服务实现
  */
 @Slf4j
-@Service
+@Service("adminAuthDomainServiceImpl")
 @RequiredArgsConstructor
 public class AuthDomainServiceImpl implements AuthDomainService {
 

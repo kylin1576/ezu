@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * C端认证应用服务
  */
-@Service
+@Service("userAuthApplicationService")
 @RequiredArgsConstructor
 public class AuthApplicationService {
 

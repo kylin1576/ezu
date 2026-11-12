@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration;
  * 分页插件 MybatisPlusInterceptor 为全局唯一 bean，已在 ezu-common（MybatisPlusInterceptorConfig）注册，
  * 本模块禁止重复注册
  */
-@Configuration
+@Configuration("orderMybatisPlusConfig")
 @MapperScan("com.ezu.order.repository.mapper")
 public class MybatisPlusConfig {
 }

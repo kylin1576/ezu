@@ -1,44 +1,15 @@
 import { localStg } from '@/utils/storage';
-import { useAuthStore } from '@/store/modules/auth';
-import { fetchRefreshToken } from '../api';
 import type { RequestInstanceState } from './type';
 
-export function getAuthorization() {
+/**
+ * get the token headers for ezu backend
+ *
+ * the backend uses Sa-Token with header name `ezu-token`, and the value is the raw token (no Bearer prefix)
+ */
+export function getTokenHeaders() {
   const token = localStg.get('token');
-  const Authorization = token ? `Bearer ${token}` : null;
 
-  return Authorization;
-}
-
-/** refresh token */
-async function handleRefreshToken() {
-  const { resetStore } = useAuthStore();
-
-  const rToken = localStg.get('refreshToken') || '';
-  const { error, data } = await fetchRefreshToken(rToken);
-  if (!error) {
-    localStg.set('token', data.token);
-    localStg.set('refreshToken', data.refreshToken);
-    return true;
-  }
-
-  resetStore();
-
-  return false;
-}
-
-export async function handleExpiredRequest(state: RequestInstanceState) {
-  if (!state.refreshTokenPromise) {
-    state.refreshTokenPromise = handleRefreshToken();
-  }
-
-  const success = await state.refreshTokenPromise;
-
-  setTimeout(() => {
-    state.refreshTokenPromise = null;
-  }, 1000);
-
-  return success;
+  return token ? { 'ezu-token': token } : null;
 }
 
 export function showErrorMsg(state: RequestInstanceState, message: string) {

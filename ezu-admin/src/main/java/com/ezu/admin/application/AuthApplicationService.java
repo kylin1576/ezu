@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 /**
  * 认证应用服务
  */
-@Service
+@Service("adminAuthApplicationService")
 @RequiredArgsConstructor
 public class AuthApplicationService {
 

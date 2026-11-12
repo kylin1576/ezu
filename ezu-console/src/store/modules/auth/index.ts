@@ -3,7 +3,7 @@ import { useRoute } from 'vue-router';
 import { defineStore } from 'pinia';
 import { useLoading } from '@sa/hooks';
 import { localStg } from '@/utils/storage';
-import { fetchGetUserInfo, fetchLogin } from '@/service/api';
+import { fetchGetUserInfo, fetchLogin, fetchLogout } from '@/service/api';
 import { $t } from '@/locales';
 import { useRouterPush } from '@/hooks/common/router';
 import { SetupStoreId } from '@/enum';
@@ -42,6 +42,9 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
   async function resetStore() {
     recordUserId();
 
+    // capture the token before clearing, so the backend session can be invalidated later
+    const currentToken = getToken();
+
     clearAuthStorage();
 
     authStore.$reset();
@@ -52,6 +55,11 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
 
     tabStore.cacheTabs();
     routeStore.resetStore();
+
+    // invalidate the backend Sa-Token session after local state is cleared (best effort, recursive-safe)
+    if (currentToken) {
+      await fetchLogout();
+    }
   }
 
   /** Record the user ID of the previous login session Used to compare with the current user ID on next login */
@@ -131,7 +139,6 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
   async function loginByToken(loginToken: Api.Auth.LoginToken) {
     // 1. stored in the localStorage, the later requests need it in headers
     localStg.set('token', loginToken.token);
-    localStg.set('refreshToken', loginToken.refreshToken);
 
     // 2. get user info
     const pass = await getUserInfo();

@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 /**
  * C端认证领域服务实现
  */
-@Service
+@Service("userAuthDomainServiceImpl")
 @RequiredArgsConstructor
 public class AuthDomainServiceImpl implements AuthDomainService {
 
