@@ -14,8 +14,14 @@ import com.ezu.order.domain.entity.Order;
 import com.ezu.order.domain.entity.OrderItem;
 import com.ezu.order.domain.enums.BillStatus;
 import com.ezu.order.domain.enums.BillType;
+import com.ezu.order.domain.enums.DepositType;
+import com.ezu.order.domain.enums.LeaseType;
+import com.ezu.order.domain.enums.LogisticsStatus;
+import com.ezu.order.domain.enums.LogisticsType;
 import com.ezu.order.domain.enums.OrderStatus;
+import com.ezu.order.domain.req.AcceptCheckReq;
 import com.ezu.order.domain.req.AdminOrderQueryReq;
+import com.ezu.order.domain.req.LogisticsInfoReq;
 import com.ezu.order.domain.req.OrderCreateReq;
 import com.ezu.order.domain.req.OrderQueryReq;
 import com.ezu.order.domain.vo.OrderCreateVo;
@@ -34,6 +40,7 @@ import com.ezu.product.domain.entity.ProductSku;
 import com.ezu.product.domain.entity.RentalPlan;
 import com.ezu.product.domain.enums.ProductStatus;
 import com.ezu.product.domain.enums.SkuStatus;
+import com.ezu.product.domain.req.DeviceCheckSaveReq;
 import com.ezu.product.domainService.DeviceDomainService;
 import com.ezu.product.repository.ProductRepository;
 import com.ezu.product.repository.ProductSkuRepository;
@@ -45,6 +52,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -64,8 +73,23 @@ public class OrderDomainServiceImpl implements OrderDomainService {
     /** 账单号前缀 */
     private static final String NO_PREFIX_BILL = "B";
 
+    /** 押金流水号前缀 */
+    private static final String NO_PREFIX_DEPOSIT = "D";
+
     /** 用户取消原因 */
     private static final String CANCEL_REASON_USER = "用户取消";
+
+    /** 押金收取原因（支付成功时模拟冻结） */
+    private static final String DEPOSIT_REASON_CHARGE = "下单押金冻结(模拟)";
+
+    /** 押金退还原因（验收通过模拟退款） */
+    private static final String DEPOSIT_REASON_REFUND = "归还验收通过退押金(模拟)";
+
+    /** 押金渠道：模拟 */
+    private static final int DEPOSIT_CHANNEL_MOCK = 1;
+
+    /** 设备报告类型：归还验收 */
+    private static final int DEVICE_CHECK_RETURN = 2;
 
     /** 一期运费恒0 */
     private static final BigDecimal FREIGHT = BigDecimal.ZERO;
@@ -192,6 +216,164 @@ public class OrderDomainServiceImpl implements OrderDomainService {
             throw new BusinessException("订单【{}】不存在", orderNo);
         }
         return assembleDetail(order);
+    }
+
+    // ==================== 履约流转（T8） ====================
+
+    @Override
+    public void onPaymentSuccess(String orderNo) {
+        Order order = requireOrder(orderNo);
+        // 幂等：回调可能重复到达，已推进到待发货直接视为成功
+        if (Objects.equals(order.getStatus(), OrderStatus.WAIT_DELIVER)) {
+            return;
+        }
+        if (!Objects.equals(order.getStatus(), OrderStatus.WAIT_PAY)) {
+            // 已取消等异常态：抛异常连同支付记录一起回滚
+            throw new BusinessException("订单状态【{}】不允许该操作", order.getStatus());
+        }
+        orderRepository.lambdaUpdate()
+                .eq(Order::getId, order.getId())
+                .eq(Order::getStatus, OrderStatus.WAIT_PAY)
+                .set(Order::getStatus, OrderStatus.WAIT_DELIVER)
+                .update();
+        // 待支付账单 → 已支付（条件更新，重复回调不重复覆盖支付时间）
+        billRepository.lambdaUpdate()
+                .eq(Bill::getOrderNo, orderNo)
+                .eq(Bill::getStatus, BillStatus.UNPAID)
+                .set(Bill::getStatus, BillStatus.PAID)
+                .set(Bill::getPayTime, LocalDateTime.now())
+                .update();
+        // 押金收取（模拟冻结）流水
+        saveDepositRecord(order, DepositType.CHARGE, order.getDepositAmount(), DEPOSIT_REASON_CHARGE);
+    }
+
+    @Override
+    public void ship(String orderNo, LogisticsInfoReq req) {
+        Order order = requireOrder(orderNo);
+        checkStatus(order, OrderStatus.WAIT_DELIVER, OrderStatus.DELIVERED);
+        boolean updated = orderRepository.lambdaUpdate()
+                .eq(Order::getId, order.getId())
+                .eq(Order::getStatus, OrderStatus.WAIT_DELIVER)
+                .set(Order::getStatus, OrderStatus.DELIVERED)
+                .update();
+        if (!updated) {
+            throw new BusinessException("订单【{}】状态已变更，请刷新后重试", orderNo);
+        }
+        // 设备：锁定2 → 在租3
+        OrderItem item = requireOrderItem(orderNo);
+        deviceDomainService.rentDevice(item.getDeviceId());
+        // 寄出物流
+        saveLogistics(orderNo, LogisticsType.OUTBOUND, req);
+    }
+
+    @Override
+    public void confirmReceive(Long userId, String orderNo) {
+        Order order = requireOwnOrder(userId, orderNo);
+        checkStatus(order, OrderStatus.DELIVERED, OrderStatus.RENTING);
+        boolean updated = orderRepository.lambdaUpdate()
+                .eq(Order::getId, order.getId())
+                .eq(Order::getStatus, OrderStatus.DELIVERED)
+                .set(Order::getStatus, OrderStatus.RENTING)
+                .update();
+        if (!updated) {
+            throw new BusinessException("订单【{}】状态已变更，请刷新后重试", orderNo);
+        }
+        // 初始租约：今天起租，租 rentDays 天（首尾均计）
+        LocalDate start = LocalDate.now();
+        LocalDate end = start.plusDays(order.getRentDays() - 1L);
+        Lease lease = new Lease();
+        lease.setOrderNo(orderNo);
+        lease.setType(LeaseType.INITIAL);
+        lease.setStartDate(start);
+        lease.setEndDate(end);
+        lease.setRent(order.getTotalRent());
+        leaseRepository.save(lease);
+        // 起止回写主表（B端逾期过滤依赖 rent_end_date）
+        orderRepository.lambdaUpdate()
+                .eq(Order::getId, order.getId())
+                .set(Order::getRentStartDate, start)
+                .set(Order::getRentEndDate, end)
+                .update();
+    }
+
+    @Override
+    public void returnApply(Long userId, String orderNo) {
+        Order order = requireOwnOrder(userId, orderNo);
+        checkStatus(order, OrderStatus.RENTING, OrderStatus.RETURNING);
+        boolean updated = orderRepository.lambdaUpdate()
+                .eq(Order::getId, order.getId())
+                .eq(Order::getStatus, OrderStatus.RENTING)
+                .set(Order::getStatus, OrderStatus.RETURNING)
+                .update();
+        if (!updated) {
+            throw new BusinessException("订单【{}】状态已变更，请刷新后重试", orderNo);
+        }
+        // 设备：在租3 → 归还验收中6
+        OrderItem item = requireOrderItem(orderNo);
+        deviceDomainService.returnDevice(item.getDeviceId());
+    }
+
+    @Override
+    public void returnSign(String orderNo, LogisticsInfoReq req) {
+        requireOrder(orderNo);
+        // 仅登记寄回物流，订单状态不变
+        saveLogistics(orderNo, LogisticsType.RETURN, req);
+    }
+
+    @Override
+    public boolean acceptCheck(String orderNo, AcceptCheckReq req) {
+        Order order = requireOrder(orderNo);
+        // 幂等：验收中60 允许重复登记验收报告（如复检）
+        if (Objects.equals(order.getStatus(), OrderStatus.RETURNING)) {
+            boolean updated = orderRepository.lambdaUpdate()
+                    .eq(Order::getId, order.getId())
+                    .eq(Order::getStatus, OrderStatus.RETURNING)
+                    .set(Order::getStatus, OrderStatus.CHECKING)
+                    .update();
+            if (!updated) {
+                throw new BusinessException("订单【{}】状态已变更，请刷新后重试", orderNo);
+            }
+        } else if (!Objects.equals(order.getStatus(), OrderStatus.CHECKING)) {
+            throw new BusinessException("订单状态【{}】不允许该操作", order.getStatus());
+        }
+        // 归还验收报告（type=2，回写设备成色），跨模块调 ezu-product
+        OrderItem item = requireOrderItem(orderNo);
+        DeviceCheckSaveReq checkReq = new DeviceCheckSaveReq();
+        checkReq.setDeviceId(item.getDeviceId());
+        checkReq.setType(DEVICE_CHECK_RETURN);
+        checkReq.setOrderNo(orderNo);
+        checkReq.setExteriorResult(req.getExteriorResult());
+        checkReq.setFunctionResult(req.getFunctionResult());
+        checkReq.setConditionLevel(req.getConditionLevel());
+        checkReq.setAttachments(req.getAttachments());
+        checkReq.setChecker(req.getChecker());
+        checkReq.setRemark(req.getRemark());
+        deviceDomainService.saveCheckReport(checkReq);
+        if (Boolean.TRUE.equals(req.getPass())) {
+            acceptConfirm(orderNo);
+            return true;
+        }
+        // 不通过停在验收中（定损二期）
+        return false;
+    }
+
+    @Override
+    public void acceptConfirm(String orderNo) {
+        Order order = requireOrder(orderNo);
+        checkStatus(order, OrderStatus.CHECKING, OrderStatus.FINISHED);
+        boolean updated = orderRepository.lambdaUpdate()
+                .eq(Order::getId, order.getId())
+                .eq(Order::getStatus, OrderStatus.CHECKING)
+                .set(Order::getStatus, OrderStatus.FINISHED)
+                .update();
+        if (!updated) {
+            throw new BusinessException("订单【{}】状态已变更，请刷新后重试", orderNo);
+        }
+        // 设备：归还验收中6 → 在库1（可再租）
+        OrderItem item = requireOrderItem(orderNo);
+        deviceDomainService.backToStock(item.getDeviceId());
+        // 押金退还流水（一期只记流水，不动支付记录）
+        saveDepositRecord(order, DepositType.REFUND, order.getDepositAmount(), DEPOSIT_REASON_REFUND);
     }
 
     /**
@@ -326,6 +508,65 @@ public class OrderDomainServiceImpl implements OrderDomainService {
     private String joinAddress(UserAddress address) {
         return StrUtil.nullToEmpty(address.getProvince()) + StrUtil.nullToEmpty(address.getCity())
                 + StrUtil.nullToEmpty(address.getDistrict()) + StrUtil.nullToEmpty(address.getDetailAddress());
+    }
+
+    /**
+     * 按订单号查订单，不存在抛业务异常
+     */
+    private Order requireOrder(String orderNo) {
+        Order order = orderRepository.getByOrderNo(orderNo);
+        if (order == null) {
+            throw new BusinessException("订单【{}】不存在", orderNo);
+        }
+        return order;
+    }
+
+    /**
+     * 订单首条明细（一期一单一明细），缺失视为脏数据抛异常
+     */
+    private OrderItem requireOrderItem(String orderNo) {
+        OrderItem item = orderItemRepository.getFirstByOrderNo(orderNo);
+        if (item == null) {
+            throw new BusinessException("订单【{}】缺少设备明细", orderNo);
+        }
+        return item;
+    }
+
+    /**
+     * 状态前置校验：非期望状态抛「订单状态【{}】不允许该操作」
+     */
+    private void checkStatus(Order order, int expected, int next) {
+        if (!Objects.equals(order.getStatus(), expected)) {
+            throw new BusinessException("订单状态【{}】不允许该操作", order.getStatus());
+        }
+    }
+
+    /**
+     * 记一段物流（寄出/寄回），状态置已发出
+     */
+    private void saveLogistics(String orderNo, int type, LogisticsInfoReq req) {
+        Logistics logistics = new Logistics();
+        logistics.setOrderNo(orderNo);
+        logistics.setType(type);
+        logistics.setCompany(req.getCompany());
+        logistics.setTrackingNo(req.getLogisticsNo());
+        logistics.setStatus(LogisticsStatus.SHIPPED);
+        logisticsRepository.save(logistics);
+    }
+
+    /**
+     * 记押金流水（收取/退还）
+     */
+    private void saveDepositRecord(Order order, int type, BigDecimal amount, String reason) {
+        DepositRecord record = new DepositRecord();
+        record.setRecordNo(noGenerator.next(NO_PREFIX_DEPOSIT));
+        record.setOrderNo(order.getOrderNo());
+        record.setUserId(order.getUserId());
+        record.setAmount(amount);
+        record.setType(type);
+        record.setChannel(DEPOSIT_CHANNEL_MOCK);
+        record.setReason(reason);
+        depositRecordRepository.save(record);
     }
 
     /**

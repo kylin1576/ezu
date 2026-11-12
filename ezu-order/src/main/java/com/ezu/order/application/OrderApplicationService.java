@@ -1,7 +1,9 @@
 package com.ezu.order.application;
 
 import com.ezu.common.page.PageVo;
+import com.ezu.order.domain.req.AcceptCheckReq;
 import com.ezu.order.domain.req.AdminOrderQueryReq;
+import com.ezu.order.domain.req.LogisticsInfoReq;
 import com.ezu.order.domain.req.OrderCreateReq;
 import com.ezu.order.domain.req.OrderQueryReq;
 import com.ezu.order.domain.req.OrderTrialReq;
@@ -72,5 +74,56 @@ public class OrderApplicationService {
      */
     public OrderDetailVo adminDetail(String orderNo) {
         return orderDomainService.adminDetail(orderNo);
+    }
+
+    // ==================== 履约流转（T8） ====================
+
+    /**
+     * B端发货（20→30，设备2→3，登记寄出物流）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void ship(String orderNo, LogisticsInfoReq req) {
+        orderDomainService.ship(orderNo, req);
+    }
+
+    /**
+     * C端确认收货（30→40，生成初始租约并回写主表租期）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void confirmReceive(Long userId, String orderNo) {
+        orderDomainService.confirmReceive(userId, orderNo);
+    }
+
+    /**
+     * C端申请归还（40→50，设备3→6）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void returnApply(Long userId, String orderNo) {
+        orderDomainService.returnApply(userId, orderNo);
+    }
+
+    /**
+     * B端登记归还寄回物流（订单状态不变）
+     */
+    public void returnSign(String orderNo, LogisticsInfoReq req) {
+        orderDomainService.returnSign(orderNo, req);
+    }
+
+    /**
+     * B端归还验收（50→60，保存验收报告；pass=true 直接完成订单）
+     *
+     * @return 是否已完成（true=订单已达已完成70）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public boolean acceptCheck(String orderNo, AcceptCheckReq req) {
+        return orderDomainService.acceptCheck(orderNo, req);
+    }
+
+    /**
+     * B端验收完成确认（60→70，设备6→1，押金退还流水）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void acceptConfirm(String orderNo) {
+        orderDomainService.acceptConfirm(orderNo);
     }
 }

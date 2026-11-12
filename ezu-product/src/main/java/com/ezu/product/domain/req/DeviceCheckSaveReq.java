@@ -23,6 +23,9 @@ public class DeviceCheckSaveReq {
     @Max(value = 2, message = "报告类型只能为1或2")
     private Integer type;
 
+    /** 关联订单号（type=2 归还验收时填写；入库质检为空） */
+    private String orderNo;
+
     /** 外观结论（1=完好，2=轻微划痕，3=明显损伤） */
     private Integer exteriorResult;
 

@@ -5,10 +5,13 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.ezu.order.domain.entity.Order;
+import com.ezu.order.domain.enums.OrderStatus;
 import com.ezu.order.domain.req.AdminOrderQueryReq;
 import com.ezu.order.domain.req.OrderQueryReq;
 import com.ezu.order.repository.mapper.OrderMapper;
 import org.springframework.stereotype.Repository;
+
+import java.time.LocalDate;
 
 /**
  * 租赁订单数据访问
@@ -30,14 +33,18 @@ public class OrderRepository extends ServiceImpl<OrderMapper, Order> {
     }
 
     /**
-     * B端分页（全量视图：订单号精确/用户ID/状态/创建日期范围，左闭右开 [start, end+1) 防秒精度丢失）
+     * B端分页（全量视图：订单号精确/用户ID/状态/创建日期范围，左闭右开 [start, end+1) 防秒精度丢失；
+     * overdue=true 只看逾期：租赁中且预计归还日期早于今天）
      */
     public IPage<Order> queryAdminPage(AdminOrderQueryReq req) {
+        boolean overdue = Boolean.TRUE.equals(req.getOverdue());
         Page<Order> page = new Page<>(req.getPageNum(), req.getPageSize());
         return this.lambdaQuery()
                 .eq(StrUtil.isNotBlank(req.getOrderNo()), Order::getOrderNo, req.getOrderNo())
                 .eq(req.getUserId() != null, Order::getUserId, req.getUserId())
                 .eq(req.getStatus() != null, Order::getStatus, req.getStatus())
+                .eq(overdue, Order::getStatus, OrderStatus.RENTING)
+                .lt(overdue, Order::getRentEndDate, LocalDate.now())
                 .ge(req.getCreateTimeStart() != null, Order::getCreateTime, req.getCreateTimeStart().atStartOfDay())
                 .lt(req.getCreateTimeEnd() != null, Order::getCreateTime, req.getCreateTimeEnd().plusDays(1).atStartOfDay())
                 .orderByDesc(Order::getCreateTime)

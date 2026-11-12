@@ -1,7 +1,9 @@
 package com.ezu.order.domainService;
 
 import com.ezu.common.page.PageVo;
+import com.ezu.order.domain.req.AcceptCheckReq;
 import com.ezu.order.domain.req.AdminOrderQueryReq;
+import com.ezu.order.domain.req.LogisticsInfoReq;
 import com.ezu.order.domain.req.OrderCreateReq;
 import com.ezu.order.domain.req.OrderQueryReq;
 import com.ezu.order.domain.vo.OrderCreateVo;
@@ -10,7 +12,7 @@ import com.ezu.order.domain.vo.OrderListVo;
 import com.ezu.order.domain.vo.OrderTrialVo;
 
 /**
- * 租赁订单领域服务（下单闭环：试算/创建(CAS锁设备)/取消/列表/详情）
+ * 租赁订单领域服务（下单闭环 + 履约流转）
  */
 public interface OrderDomainService {
 
@@ -49,4 +51,48 @@ public interface OrderDomainService {
      * B端订单详情（全量视图，无本人校验）
      */
     OrderDetailVo adminDetail(String orderNo);
+
+    // ==================== 履约流转（T8） ====================
+
+    /**
+     * 支付成功推进（ezu-payment 回调调用，事务由回调方管理）：
+     * 待支付10→待发货20（幂等：已20直接返回，其他状态抛异常回滚回调）；
+     * 账单置已支付+支付时间；插押金收取（冻结）流水
+     */
+    void onPaymentSuccess(String orderNo);
+
+    /**
+     * B端发货：待发货20→已发货30（条件更新防并发），设备锁定2→在租3，登记寄出物流
+     */
+    void ship(String orderNo, LogisticsInfoReq req);
+
+    /**
+     * C端确认收货：已发货30→租赁中40；生成初始租约（今天起租 rentDays 天）；
+     * 租期起止回写主表（逾期过滤依赖 rent_end_date）
+     */
+    void confirmReceive(Long userId, String orderNo);
+
+    /**
+     * C端申请归还：租赁中40→归还中50，设备在租3→归还验收中6
+     */
+    void returnApply(Long userId, String orderNo);
+
+    /**
+     * B端登记归还寄回物流（订单状态不变，仅记 t_logistics type=2）
+     */
+    void returnSign(String orderNo, LogisticsInfoReq req);
+
+    /**
+     * B端归还验收：归还中50→验收中60（幂等：已60可重复登记报告）；
+     * 调 ezu-product 保存 type=2 验收报告并回写成色；
+     * pass=true 直接推进已完成，pass=false 停在验收中（定损二期）
+     *
+     * @return 是否已完成（true=订单已达已完成70）
+     */
+    boolean acceptCheck(String orderNo, AcceptCheckReq req);
+
+    /**
+     * B端验收完成确认：验收中60→已完成70，设备归还验收中6→在库1，插押金退还流水
+     */
+    void acceptConfirm(String orderNo);
 }

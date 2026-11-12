@@ -71,4 +71,22 @@ public class AppOrderController {
         orderApplicationService.cancel(StpUserUtil.getUserId(), orderNo);
         return ResultData.success(null);
     }
+
+    /**
+     * 确认收货（已发货→租赁中，租约生效）
+     */
+    @PostMapping("/confirmReceive/{orderNo}")
+    public ResultData<Void> confirmReceive(@PathVariable String orderNo) {
+        orderApplicationService.confirmReceive(StpUserUtil.getUserId(), orderNo);
+        return ResultData.success(null);
+    }
+
+    /**
+     * 申请归还（租赁中→归还中）
+     */
+    @PostMapping("/returnApply/{orderNo}")
+    public ResultData<Void> returnApply(@PathVariable String orderNo) {
+        orderApplicationService.returnApply(StpUserUtil.getUserId(), orderNo);
+        return ResultData.success(null);
+    }
 }

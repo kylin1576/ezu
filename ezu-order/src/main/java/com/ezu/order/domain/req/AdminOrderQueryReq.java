@@ -31,4 +31,7 @@ public class AdminOrderQueryReq extends PageQuery {
 
     /** 下单日期-结束（yyyy-MM-dd，含当日） */
     private LocalDate createTimeEnd;
+
+    /** 是否只看逾期（true=租赁中且预计归还日期早于今天；M5仪表盘复用） */
+    private Boolean overdue;
 }
