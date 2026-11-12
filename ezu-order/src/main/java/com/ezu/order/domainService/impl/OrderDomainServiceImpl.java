@@ -28,6 +28,7 @@ import com.ezu.order.domain.vo.OrderCreateVo;
 import com.ezu.order.domain.vo.OrderDetailVo;
 import com.ezu.order.domain.vo.OrderListVo;
 import com.ezu.order.domain.vo.OrderTrialVo;
+import com.ezu.order.domain.vo.PaymentContextVo;
 import com.ezu.order.domainService.OrderDomainService;
 import com.ezu.order.repository.BillRepository;
 import com.ezu.order.repository.DepositRecordRepository;
@@ -219,6 +220,24 @@ public class OrderDomainServiceImpl implements OrderDomainService {
     }
 
     // ==================== 履约流转（T8） ====================
+
+    @Override
+    public PaymentContextVo getPaymentContext(String orderNo) {
+        Order order = requireOrder(orderNo);
+        PaymentContextVo ctx = new PaymentContextVo();
+        ctx.setOrderNo(order.getOrderNo());
+        ctx.setUserId(order.getUserId());
+        ctx.setStatus(order.getStatus());
+        ctx.setPayAmount(order.getPayAmount());
+        Bill unpaid = billRepository.lambdaQuery()
+                .eq(Bill::getOrderNo, orderNo)
+                .eq(Bill::getStatus, BillStatus.UNPAID)
+                .orderByDesc(Bill::getId)
+                .last("LIMIT 1")
+                .one();
+        ctx.setUnpaidBillNo(unpaid == null ? null : unpaid.getBillNo());
+        return ctx;
+    }
 
     @Override
     public void onPaymentSuccess(String orderNo) {

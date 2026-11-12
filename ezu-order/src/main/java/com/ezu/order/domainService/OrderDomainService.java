@@ -10,6 +10,7 @@ import com.ezu.order.domain.vo.OrderCreateVo;
 import com.ezu.order.domain.vo.OrderDetailVo;
 import com.ezu.order.domain.vo.OrderListVo;
 import com.ezu.order.domain.vo.OrderTrialVo;
+import com.ezu.order.domain.vo.PaymentContextVo;
 
 /**
  * 租赁订单领域服务（下单闭环 + 履约流转）
@@ -51,6 +52,11 @@ public interface OrderDomainService {
      * B端订单详情（全量视图，无本人校验）
      */
     OrderDetailVo adminDetail(String orderNo);
+
+    /**
+     * 支付上下文（ezu-payment 发起支付时读取：归属/状态/应付金额/待支付账单号）
+     */
+    PaymentContextVo getPaymentContext(String orderNo);
 
     // ==================== 履约流转（T8） ====================
 

@@ -18,6 +18,12 @@
             <groupId>com.ezu</groupId>
             <artifactId>ezu-common</artifactId>
         </dependency>
+        <!-- 支付回调跨模块驱动订单状态推进，依赖严格单向 payment → order -->
+        <dependency>
+            <groupId>com.ezu</groupId>
+            <artifactId>ezu-order</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
