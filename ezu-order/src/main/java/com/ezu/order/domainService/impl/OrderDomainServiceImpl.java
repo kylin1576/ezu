@@ -240,7 +240,7 @@ public class OrderDomainServiceImpl implements OrderDomainService {
     }
 
     @Override
-    public void onPaymentSuccess(String orderNo) {
+    public void onPaymentSuccess(String orderNo, String billNo) {
         Order order = requireOrder(orderNo);
         // 幂等：回调可能重复到达，已推进到待发货直接视为成功
         if (Objects.equals(order.getStatus(), OrderStatus.WAIT_DELIVER)) {
@@ -250,13 +250,18 @@ public class OrderDomainServiceImpl implements OrderDomainService {
             // 已取消等异常态：抛异常连同支付记录一起回滚
             throw new BusinessException("订单状态【{}】不允许该操作", order.getStatus());
         }
-        orderRepository.lambdaUpdate()
+        boolean updated = orderRepository.lambdaUpdate()
                 .eq(Order::getId, order.getId())
                 .eq(Order::getStatus, OrderStatus.WAIT_PAY)
                 .set(Order::getStatus, OrderStatus.WAIT_DELIVER)
                 .update();
-        // 待支付账单 → 已支付（条件更新，重复回调不重复覆盖支付时间）
+        if (!updated) {
+            // 与取消并发：CAS 命中 0 行必须回滚，否则已取消订单落「已支付账单+押金冻结」脏数据
+            throw new BusinessException("订单【{}】状态已变更，支付未完成", orderNo);
+        }
+        // 待支付账单 → 已支付（按支付单关联的 billNo 精确置付；条件更新防重复覆盖支付时间）
         billRepository.lambdaUpdate()
+                .eq(StrUtil.isNotBlank(billNo), Bill::getBillNo, billNo)
                 .eq(Bill::getOrderNo, orderNo)
                 .eq(Bill::getStatus, BillStatus.UNPAID)
                 .set(Bill::getStatus, BillStatus.PAID)
@@ -269,7 +274,7 @@ public class OrderDomainServiceImpl implements OrderDomainService {
     @Override
     public void ship(String orderNo, LogisticsInfoReq req) {
         Order order = requireOrder(orderNo);
-        checkStatus(order, OrderStatus.WAIT_DELIVER, OrderStatus.DELIVERED);
+        checkStatus(order, OrderStatus.WAIT_DELIVER);
         boolean updated = orderRepository.lambdaUpdate()
                 .eq(Order::getId, order.getId())
                 .eq(Order::getStatus, OrderStatus.WAIT_DELIVER)
@@ -288,7 +293,7 @@ public class OrderDomainServiceImpl implements OrderDomainService {
     @Override
     public void confirmReceive(Long userId, String orderNo) {
         Order order = requireOwnOrder(userId, orderNo);
-        checkStatus(order, OrderStatus.DELIVERED, OrderStatus.RENTING);
+        checkStatus(order, OrderStatus.DELIVERED);
         boolean updated = orderRepository.lambdaUpdate()
                 .eq(Order::getId, order.getId())
                 .eq(Order::getStatus, OrderStatus.DELIVERED)
@@ -318,7 +323,7 @@ public class OrderDomainServiceImpl implements OrderDomainService {
     @Override
     public void returnApply(Long userId, String orderNo) {
         Order order = requireOwnOrder(userId, orderNo);
-        checkStatus(order, OrderStatus.RENTING, OrderStatus.RETURNING);
+        checkStatus(order, OrderStatus.RENTING);
         boolean updated = orderRepository.lambdaUpdate()
                 .eq(Order::getId, order.getId())
                 .eq(Order::getStatus, OrderStatus.RENTING)
@@ -334,7 +339,12 @@ public class OrderDomainServiceImpl implements OrderDomainService {
 
     @Override
     public void returnSign(String orderNo, LogisticsInfoReq req) {
-        requireOrder(orderNo);
+        Order order = requireOrder(orderNo);
+        // 仅归还链路可登记寄回物流，防 B 端误操作产生脏数据
+        if (!Objects.equals(order.getStatus(), OrderStatus.RETURNING)
+                && !Objects.equals(order.getStatus(), OrderStatus.CHECKING)) {
+            throw new BusinessException("订单状态【{}】不允许该操作", order.getStatus());
+        }
         // 仅登记寄回物流，订单状态不变
         saveLogistics(orderNo, LogisticsType.RETURN, req);
     }
@@ -379,7 +389,7 @@ public class OrderDomainServiceImpl implements OrderDomainService {
     @Override
     public void acceptConfirm(String orderNo) {
         Order order = requireOrder(orderNo);
-        checkStatus(order, OrderStatus.CHECKING, OrderStatus.FINISHED);
+        checkStatus(order, OrderStatus.CHECKING);
         boolean updated = orderRepository.lambdaUpdate()
                 .eq(Order::getId, order.getId())
                 .eq(Order::getStatus, OrderStatus.CHECKING)
@@ -554,7 +564,7 @@ public class OrderDomainServiceImpl implements OrderDomainService {
     /**
      * 状态前置校验：非期望状态抛「订单状态【{}】不允许该操作」
      */
-    private void checkStatus(Order order, int expected, int next) {
+    private void checkStatus(Order order, int expected) {
         if (!Objects.equals(order.getStatus(), expected)) {
             throw new BusinessException("订单状态【{}】不允许该操作", order.getStatus());
         }

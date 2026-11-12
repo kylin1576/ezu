@@ -1,7 +1,9 @@
 package com.ezu.payment.api;
 
+import com.ezu.common.exception.BusinessException;
 import com.ezu.common.response.ResultData;
 import com.ezu.payment.application.PaymentApplicationService;
+import com.ezu.payment.domain.enums.PayChannel;
 import com.ezu.payment.domain.req.PaymentCallbackReq;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,10 +28,16 @@ public class CallbackController {
     private final PaymentApplicationService paymentApplicationService;
 
     /**
-     * 渠道回调入口（channel=渠道编码：1模拟 2支付宝 3微信）
+     * 渠道回调入口（channel=渠道编码：2支付宝 3微信）
+     * <p>
+     * mock 渠道（1）无外部回调：支付单号可枚举且无签名校验，放行即等于任意待支付单可被伪造刷成功，
+     * 故 mock 只允许 pay() 内部驱动回调链路；二期真实渠道接入时补签名校验+金额核对
      */
     @PostMapping("/{channel}")
     public ResultData<Void> callback(@PathVariable Integer channel, @Validated @RequestBody PaymentCallbackReq req) {
+        if (PayChannel.MOCK == channel) {
+            throw new BusinessException("模拟渠道不支持外部回调");
+        }
         paymentApplicationService.callback(channel, req);
         return ResultData.success(null);
     }

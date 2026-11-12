@@ -49,8 +49,6 @@ public class DeviceDomainServiceImpl implements DeviceDomainService {
     private static final String NO_PREFIX_DEVICE = "Z";
 
     /** 报告类型：入库质检 */
-    private static final int CHECK_TYPE_INBOUND = 1;
-
     /** 锁定候选数量：一次取 5 台逐台 CAS，覆盖常见并发度后快速失败（单遍 bounded） */
     private static final int LOCK_CANDIDATES = 5;
 
@@ -122,8 +120,8 @@ public class DeviceDomainServiceImpl implements DeviceDomainService {
         // 照片 List → JSON 字符串落库
         report.setAttachments(req.getAttachments() == null ? null : JSONUtil.toJsonStr(req.getAttachments()));
         deviceCheckReportRepository.save(report);
-        // 入库质检定级 → 回写设备成色
-        if (Objects.equals(req.getType(), CHECK_TYPE_INBOUND) && req.getConditionLevel() != null) {
+        // 定级非空 → 回写设备成色（入库质检与归还验收均回写，归还后成色随之更新）
+        if (req.getConditionLevel() != null) {
             deviceRepository.lambdaUpdate()
                     .eq(Device::getId, device.getId())
                     .set(Device::getConditionLevel, req.getConditionLevel())
@@ -280,11 +278,16 @@ public class DeviceDomainServiceImpl implements DeviceDomainService {
      * 带前置状态的条件状态流转（WHERE id AND status=当前值，防并发误流转）
      */
     private void transitionStatus(Device device, int target) {
-        deviceRepository.lambdaUpdate()
+        boolean updated = deviceRepository.lambdaUpdate()
                 .eq(Device::getId, device.getId())
                 .eq(Device::getStatus, device.getStatus())
                 .set(Device::getStatus, target)
                 .update();
+        if (!updated) {
+            // 与其他操作（维修登记/报废/订单流转）并发：CAS 命中 0 行必须失败，
+            // 否则订单与设备状态静默脱钩（如设备卡在锁定态无法释放）
+            throw new BusinessException("设备状态【{}】不允许该操作", device.getStatus());
+        }
     }
 
     /**

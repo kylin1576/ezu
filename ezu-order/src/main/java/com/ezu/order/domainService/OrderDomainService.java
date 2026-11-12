@@ -62,10 +62,10 @@ public interface OrderDomainService {
 
     /**
      * 支付成功推进（ezu-payment 回调调用，事务由回调方管理）：
-     * 待支付10→待发货20（幂等：已20直接返回，其他状态抛异常回滚回调）；
-     * 账单置已支付+支付时间；插押金收取（冻结）流水
+     * 待支付10→待发货20（条件更新防与取消竞态，失败抛异常回滚回调；已20幂等返回）；
+     * 账单按 billNo 精确置已支付+支付时间；插押金收取（冻结）流水
      */
-    void onPaymentSuccess(String orderNo);
+    void onPaymentSuccess(String orderNo, String billNo);
 
     /**
      * B端发货：待发货20→已发货30（条件更新防并发），设备锁定2→在租3，登记寄出物流
